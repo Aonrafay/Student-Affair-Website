@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ambassador Profiles - Student Affairs</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+  <!-- Navigation Bar -->
+  <nav>
+    <div class="container">
+      <div class="logo">
+        <i class="fas fa-graduation-cap"></i> Student Affairs
+      </div>
+      <button class="nav-toggle">
+        <i class="fas fa-bars"></i>
+      </button>
+      <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="about-head.html">About Head</a></li>
+        <li><a href="team.html">Team</a></li>
+        <li><a href="societies.html">Societies</a></li>
+        <li><a href="events.html">Events</a></li>
+        <li><a href="ambassadors.html">Ambassadors</a></li>
+        <li><a href="partners.html">Partners</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1>Ambassador Profiles</h1>
+      <p>Meet Our Campus Representatives</p>
+    </div>
+  </section>
+
+  <!-- Search Section -->
+  <section class="light-bg">
+    <div class="container">
+      <div style="max-width: 500px; margin: 0 auto;">
+        <input type="text" id="ambassadorSearch" placeholder="🔍 Search ambassadors or universities..."
+          style="width: 100%; padding: 1rem; border: 2px solid var(--border-color); border-radius: 5px; font-size: 1rem;">
+      </div>
+    </div>
+  </section>
+
+  <!-- Ambassadors Grid -->
+  <section class="white-bg">
+    <div class="container">
+      <div class="grid grid-2" id="ambassadorsGrid">
+        <!-- Ambassadors will be populated by JavaScript -->
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-container">
+      <div class="footer-grid">
+        <div class="footer-section">
+          <h4><i class="fas fa-graduation-cap"></i> Student Affairs</h4>
+          <p>Excellence in Innovation, Integrity in Action, Growth Through Community</p>
+          <div class="social-links">
+            <a href="#" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+            <a href="#" title="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="#" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+            <a href="#" title="Twitter"><i class="fab fa-twitter"></i></a>
+          </div>
+        </div>
+
+        <div class="footer-section">
+          <h4>Quick Links</h4>
+          <ul>
+            <li><a href="about-head.html">About Head</a></li>
+            <li><a href="societies.html">Societies</a></li>
+            <li><a href="events.html">Events</a></li>
+            <li><a href="ambassadors.html">Ambassadors</a></li>
+            <li><a href="partners.html">Partners</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-section">
+          <h4>Contact</h4>
+          <ul>
+            <li>📧 <a href="mailto:Studentaffairs@niit.edu.pk">Studentaffairs@niit.edu.pk</a></li>
+            <li>📞 +92 320 9420156</li>
+            <li>📍 NASTP DELTA Lahore, Building DELTA 3</li>
+            <li>Monday - Friday, 9 AM - 5 PM</li>
+          </ul>
+        </div>
+
+        <div class="footer-section">
+          <h4>Follow Our Journey</h4>
+          <p>Subscribe to our newsletter for updates on events and opportunities.</p>
+          <form style="margin-top: 1rem;">
+            <input type="email" placeholder="Your email"
+              style="width: 100%; padding: 0.5rem; border: none; border-radius: 3px; margin-bottom: 0.5rem;">
+            <button type="submit" class="btn" style="width: 100%; margin: 0;">Subscribe</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>&copy; 2025 Student Affairs Department. All rights reserved. | <a href="#"
+            style="color: var(--accent-gold);">Privacy Policy</a> | <a href="#" style="color: var(--accent-gold);">Terms
+            of Service</a></p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/script.js"></script>
+  <script>
+    // Ambassador data
+    const ambassadorData = [
+      {
+        id: 1,
+        name: 'Ahmed Hassan',
+        university: 'FAST University, Islamabad',
+        course: 'Computer Science',
+        year: 'Final Year',
+        email: 'ahmed.hassan@fast.edu',
+        phone: '+92-300-1234567',
+        about: 'Passionate advocate for technology education with a deep interest in AI and machine learning. Ahmed has been instrumental in building our presence at FAST University.',
+        achievements: ['50+ Student Recruitments', '15+ Awareness Sessions', 'Best Ambassador 2024'],
+        responsibilities: 'Organizing awareness sessions, recruitment drives, and counseling for perspective students.'
+      },
+      {
+        id: 2,
+        name: 'Fatima Khan',
+        university: 'LUMS, Lahore',
+        course: 'Software Engineering',
+        year: '3rd Year',
+        email: 'fatima.khan@lums.edu',
+        phone: '+92-300-2234567',
+        about: 'Dedicated to promoting computer science careers among women. Fatima has created meaningful impact through mentorship and advocacy programs.',
+        achievements: ['200+ Students Impacted', 'Women in Tech Champion', 'Program Developer'],
+        responsibilities: 'Mentoring female students, organizing career seminars, and building support networks.'
+      },
+      {
+        id: 3,
+        name: 'Ali Siddiqui',
+        university: 'COMSATS, Islamabad',
+        course: 'Artificial Intelligence',
+        year: 'Final Year',
+        email: 'ali.siddiqui@comsats.edu',
+        phone: '+92-300-3234567',
+        about: 'Enthusiastic about AI and emerging technologies. Ali focuses on joint collaborative projects between universities.',
+        achievements: ['5 Universities Connected', '300+ Students Reached', 'Joint Event Coordinator'],
+        responsibilities: 'Coordinating inter-university events, promoting AI programs, and industry partnerships.'
+      },
+      {
+        id: 4,
+        name: 'Zainab Malik',
+        university: 'SZABIST, Karachi',
+        course: 'Cyber Security',
+        year: '2nd Year',
+        email: 'zainab.malik@szabist.edu',
+        phone: '+92-300-4234567',
+        about: 'Dynamic promoter of cybersecurity education with emphasis on practical training and awareness.',
+        achievements: ['8+ Security Sessions', '250+ Participants', 'Cyber Awareness Lead'],
+        responsibilities: 'Conducting cybersecurity workshops, sharing industry trends, and promoting security awareness.'
+      },
+      {
+        id: 5,
+        name: 'Sara Ahmed',
+        university: 'Punjab University, Lahore',
+        course: 'Computer Science',
+        year: 'Final Year',
+        email: 'sara.ahmed@pu.edu.pk',
+        phone: '+92-300-5234567',
+        about: 'Bridge builder between academia and industry. Sara excels in facilitating internships and placements.',
+        achievements: ['20+ Placements', 'Industry Partnerships', 'Career Fair Coordinator'],
+        responsibilities: 'Organizing career fairs, connecting with companies, and facilitating student placements.'
+      },
+      {
+        id: 6,
+        name: 'Hassan Ali',
+        university: 'NUCCES, Lahore',
+        course: 'Software Engineering',
+        year: '3rd Year',
+        email: 'hassan.ali@nucces.edu',
+        phone: '+92-300-6234567',
+        about: 'Tech enthusiast focused on innovation and startups. Hassan promotes entrepreneurship among students.',
+        achievements: ['10+ Startup Ideas', 'Innovation Workshop Lead', 'Tech Evangelist'],
+        responsibilities: 'Promoting startup culture, organizing hackathons, and mentoring tech entrepreneurs.'
+      },
+      {
+        id: 7,
+        name: 'Maria Santos',
+        university: 'IBA, Karachi',
+        course: 'Business & CS',
+        year: 'Final Year',
+        email: 'maria.santos@iba.edu.pk',
+        phone: '+92-300-7234567',
+        about: 'Bridging technology and business perspectives. Maria focuses on holistic student development.',
+        achievements: ['Leadership Workshops', 'Business Tech Talks', 'Community Builder'],
+        responsibilities: 'Organizing business-tech seminars, mentoring programs, and leadership development.'
+      },
+      {
+        id: 8,
+        name: 'Hamza Khan',
+        university: 'GIKI, Islamabad',
+        course: 'Computer Engineering',
+        year: '2nd Year',
+        email: 'hamza.khan@giki.edu.pk',
+        phone: '+92-300-8234567',
+        about: 'Systems engineer with passion for IoT and embedded systems. Hamza promotes hardware innovation.',
+        achievements: ['IoT Projects', 'Hardware Workshop Lead', 'Innovation Pioneer'],
+        responsibilities: 'Promoting embedded systems, organizing hardware labs, and technical demonstrations.'
+      }
+    ];
+
+    // Load ambassadors
+    function loadAmbassadors() {
+      const ambassadorsGrid = document.getElementById('ambassadorsGrid');
+      ambassadorsGrid.innerHTML = ambassadorData.map(amb => `
+        <div class="card" data-ambassador="${amb.name} ${amb.university}">
+          <div style="height: 300px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+            <img src="https://placehold.co/400x300/1B5E9E/FFFFFF?text=${encodeURIComponent(amb.name)}" alt="${amb.name}" style="width: 100%; height: 100%; object-fit: cover;">
+          </div>
+          <div style="padding: 1.5rem;">
+            <h3 style="color: var(--primary-dark); margin-bottom: 0.3rem;">${amb.name}</h3>
+            <p style="color: var(--accent-gold); font-weight: 600; margin-bottom: 0.5rem;">${amb.university}</p>
+            <p style="color: var(--gray-text); font-size: 0.9rem; margin-bottom: 0.8rem;">
+              <i class="fas fa-book" style="margin-right: 0.5rem;"></i>${amb.course} | ${amb.year}
+            </p>
+            <p style="color: var(--gray-text); margin-bottom: 1rem; line-height: 1.5;">${amb.about}</p>
+            
+            <div style="background: var(--light-bg); padding: 1rem; border-radius: 5px; margin-bottom: 1rem;">
+              <p style="color: var(--primary-blue); font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">Key Achievements:</p>
+              <ul style="list-style: none; padding-left: 0; margin: 0;">
+                ${amb.achievements.map(ach => `<li style="color: var(--gray-text); font-size: 0.85rem; margin-bottom: 0.3rem;"><i class="fas fa-trophy" style="color: var(--accent-gold); margin-right: 0.5rem;"></i>${ach}</li>`).join('')}
+              </ul>
+            </div>
+
+            <div style="display: flex; gap: 0.5rem;">
+              <a href="mailto:${amb.email}" class="btn" style="flex: 1; padding: 0.6rem; font-size: 0.9rem; text-align: center; text-decoration: none;">
+                <i class="fas fa-envelope"></i> Email
+              </a>
+              <button onclick="alert('Phone: ${amb.phone}')" class="btn btn-secondary" style="flex: 1; padding: 0.6rem; font-size: 0.9rem;">
+                <i class="fas fa-phone"></i> Call
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Search functionality
+    document.getElementById('ambassadorSearch').addEventListener('keyup', function () {
+      const searchTerm = this.value.toLowerCase();
+      const cards = document.querySelectorAll('.card[data-ambassador]');
+
+      cards.forEach(card => {
+        const text = card.getAttribute('data-ambassador').toLowerCase();
+        card.style.display = text.includes(searchTerm) ? 'block' : 'none';
+      });
+    });
+
+    // Load on page load
+    window.addEventListener('load', loadAmbassadors);
+  </script>
+</body>
+
+</html>

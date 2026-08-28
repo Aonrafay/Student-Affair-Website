@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Partner Details - Student Affairs</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+  <!-- Navigation Bar -->
+  <nav>
+    <div class="container">
+      <div class="logo">
+        <i class="fas fa-graduation-cap"></i> Student Affairs
+      </div>
+      <button class="nav-toggle">
+        <i class="fas fa-bars"></i>
+      </button>
+      <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="about-head.html">About Head</a></li>
+        <li><a href="team.html">Team</a></li>
+        <li><a href="societies.html">Societies</a></li>
+        <li><a href="events.html">Events</a></li>
+        <li><a href="ambassadors.html">Ambassadors</a></li>
+        <li><a href="partners.html">Partners</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1>Partner Information</h1>
+      <p>Building Strong Collaborations</p>
+    </div>
+  </section>
+
+  <!-- Partner Details Section -->
+  <section class="white-bg">
+    <div class="container">
+      <div id="partnerDetailContainer">Loading...</div>
+    </div>
+  </section>
+
+  <!-- All Partners Grid -->
+  <section class="light-bg">
+    <div class="container">
+      <h2 class="text-center">All Our Partners</h2>
+      <div class="grid grid-3" id="partnersGrid" style="margin-top: 2rem;">
+        <!-- Partners will be populated by JavaScript -->
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-container">
+      <div class="footer-grid">
+        <div class="footer-section">
+          <h4><i class="fas fa-graduation-cap"></i> Student Affairs</h4>
+          <p>Excellence in Innovation, Integrity in Action, Growth Through Community</p>
+          <div class="social-links">
+            <a href="#" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+            <a href="#" title="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="#" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+            <a href="#" title="Twitter"><i class="fab fa-twitter"></i></a>
+          </div>
+        </div>
+
+        <div class="footer-section">
+          <h4>Quick Links</h4>
+          <ul>
+            <li><a href="about-head.html">About Head</a></li>
+            <li><a href="societies.html">Societies</a></li>
+            <li><a href="events.html">Events</a></li>
+            <li><a href="ambassadors.html">Ambassadors</a></li>
+            <li><a href="partners.html">Partners</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-section">
+          <h4>Contact</h4>
+          <ul>
+            <li>📧 <a href="mailto:Studentaffairs@niit.edu.pk">Studentaffairs@niit.edu.pk</a></li>
+            <li>📞 +92 320 9420156</li>
+            <li>📍 NASTP DELTA Lahore , Building DELTA 3</li>
+            <li>Monday - Friday, 9 AM - 5 PM</li>
+          </ul>
+        </div>
+
+        <div class="footer-section">
+          <h4>Follow Our Journey</h4>
+          <p>Subscribe to our newsletter for updates on events and opportunities.</p>
+          <form style="margin-top: 1rem;">
+            <input type="email" placeholder="Your email"
+              style="width: 100%; padding: 0.5rem; border: none; border-radius: 3px; margin-bottom: 0.5rem;">
+            <button type="submit" class="btn" style="width: 100%; margin: 0;">Subscribe</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>&copy; 2025 Student Affairs Department. All rights reserved. | <a href="#"
+            style="color: var(--accent-gold);">Privacy Policy</a> | <a href="#" style="color: var(--accent-gold);">Terms
+            of Service</a></p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/script.js"></script>
+  <script>
+    const partnerData = [
+      {
+        id: 1,
+        name: 'Google',
+        category: 'Platinum',
+        industry: 'Technology & Cloud',
+        email: 'partnerships@google.com',
+        phone: '+92-300-1234567',
+        website: 'https://google.com',
+        established: '2020',
+        about: 'Google is a world-leading technology company specializing in internet services and products. We collaborate with Google to provide students with training in cloud computing, AI, and digital innovation.',
+        programs: [
+          'Google Cloud Training',
+          'AI/ML Workshops',
+          'Campus Recruitment',
+          'Internship Programs',
+          'Innovation Lab Setup'
+        ],
+        benefits: [
+          'Access to Google Cloud Credits',
+          'Expert mentorship from Google engineers',
+          'Job opportunities post-graduation',
+          'Exclusive training materials',
+          'Industry certification programs'
+        ],
+        contact: {
+          person: 'John Smith',
+          position: 'Partnership Manager',
+          email: 'john.smith@google.com'
+        }
+      },
+      {
+        id: 2,
+        name: 'Microsoft',
+        category: 'Platinum',
+        industry: 'Software & Cloud',
+        email: 'partnerships@microsoft.com',
+        phone: '+92-300-2234567',
+        website: 'https://microsoft.com',
+        established: '2019',
+        about: 'Microsoft is an innovator in cloud computing and enterprise software. Our partnership focuses on Azure training, AI applications, and modern development practices.',
+        programs: [
+          'Azure Fundamentals',
+          'Microsoft Learn Programs',
+          'Campus Recruitment',
+          'Research Collaboration',
+          'Lab Setup & Support'
+        ],
+        benefits: [
+          'Azure credits for projects',
+          'Microsoft 365 for students',
+          'Technical workshops',
+          'Certification support',
+          'Career advancement opportunities'
+        ],
+        contact: {
+          person: 'Sarah Johnson',
+          position: 'Education Partnership Lead',
+          email: 'sarah.johnson@microsoft.com'
+        }
+      },
+      {
+        id: 3,
+        name: 'Amazon',
+        category: 'Diamond',
+        industry: 'Cloud Services',
+        email: 'partnerships@amazon.com',
+        phone: '+92-300-3234567',
+        website: 'https://aws.amazon.com',
+        established: '2021',
+        about: 'Amazon Web Services (AWS) is the leading cloud infrastructure provider. We collaborate to offer AWS training and cloud architecture courses to our students.',
+        programs: [
+          'AWS Academy Program',
+          'Cloud Architecture Training',
+          'Career Development',
+          'Certification Preparation',
+          'Internship Opportunities'
+        ],
+        benefits: [
+          'AWS Educate membership',
+          'Lab environments for learning',
+          'AWS certification exams',
+          'Career pathways',
+          'Internship placement support'
+        ],
+        contact: {
+          person: 'Michael Chen',
+          position: 'Academic Lead',
+          email: 'michael.chen@amazon.com'
+        }
+      },
+      {
+        id: 4,
+        name: 'Cisco',
+        category: 'Diamond',
+        industry: 'Networking & Security',
+        email: 'partnerships@cisco.com',
+        phone: '+92-300-4234567',
+        website: 'https://cisco.com',
+        established: '2020',
+        about: 'Cisco specializes in networking and cybersecurity solutions. Our partnership emphasizes hands-on networking labs and security training.',
+        programs: [
+          'CCNA Training',
+          'Network Security Courses',
+          'Lab Equipment Provision',
+          'Security Workshops',
+          'Certification Support'
+        ],
+        benefits: [
+          'Networking lab access',
+          'Security training materials',
+          'Industry certifications',
+          'Career guidance',
+          'Job placement assistance'
+        ],
+        contact: {
+          person: 'Emily Davis',
+          position: 'Network Academy Manager',
+          email: 'emily.davis@cisco.com'
+        }
+      },
+      {
+        id: 5,
+        name: 'Oracle',
+        category: 'Diamond',
+        industry: 'Database Solutions',
+        email: 'partnerships@oracle.com',
+        phone: '+92-300-5234567',
+        website: 'https://oracle.com',
+        established: '2022',
+        about: 'Oracle is a leading database and enterprise software company. We collaborate on database training and enterprise application development.',
+        programs: [
+          'Oracle Database Courses',
+          'Enterprise Development',
+          'SQL Training',
+          'Certification Programs',
+          'Industry Projects'
+        ],
+        benefits: [
+          'Database software access',
+          'Training certifications',
+          'Expert guidance',
+          'Internship programs',
+          'Career opportunities'
+        ],
+        contact: {
+          person: 'Robert Wilson',
+          position: 'University Relations',
+          email: 'robert.wilson@oracle.com'
+        }
+      },
+      {
+        id: 6,
+        name: 'IBM',
+        category: 'Gold',
+        industry: 'Enterprise Technology',
+        email: 'partnerships@ibm.com',
+        phone: '+92-300-6234567',
+        website: 'https://ibm.com',
+        established: '2021',
+        about: 'IBM provides enterprise software and services. Our partnership covers enterprise architecture, AI, and business solutions training.',
+        programs: [
+          'Enterprise Development',
+          'AI & Analytics',
+          'Cloud Services',
+          'Industry Certifications',
+          'Guest Lectures'
+        ],
+        benefits: [
+          'IBM software trial licenses',
+          'Training programs',
+          'Expert mentorship',
+          'Internship opportunities',
+          'Global career paths'
+        ],
+        contact: {
+          person: 'Lisa Anderson',
+          position: 'Academic Relations',
+          email: 'lisa.anderson@ibm.com'
+        }
+      },
+      {
+        id: 7,
+        name: 'Intel',
+        category: 'Gold',
+        industry: 'Hardware & Processors',
+        email: 'partnerships@intel.com',
+        phone: '+92-300-7234567',
+        website: 'https://intel.com',
+        established: '2022',
+        about: 'Intel is a leader in processor technology and hardware innovation. We collaborate on hardware design and optimization courses.',
+        programs: [
+          'Hardware Design',
+          'Processor Architecture',
+          'Optimization Techniques',
+          'Research Projects',
+          'Industry Partnerships'
+        ],
+        benefits: [
+          'Hardware resources',
+          'Technical documentation',
+          'Expert consultations',
+          'Research opportunities',
+          'Career development'
+        ],
+        contact: {
+          person: 'James Martinez',
+          position: 'University Programs',
+          email: 'james.martinez@intel.com'
+        }
+      },
+      {
+        id: 8,
+        name: 'LinkedIn',
+        category: 'Gold',
+        industry: 'Career Development',
+        email: 'partnerships@linkedin.com',
+        phone: '+92-300-8234567',
+        website: 'https://linkedin.com',
+        established: '2020',
+        about: 'LinkedIn is the world\'s largest professional network. Our partnership focuses on career development and professional networking.',
+        programs: [
+          'LinkedIn Learning',
+          'Career Guidance',
+          'Networking Events',
+          'Resume Building',
+          'Job Placement'
+        ],
+        benefits: [
+          'Premium LinkedIn Learning',
+          'Career coaching',
+          'Job opportunities',
+          'Professional development',
+          'Industry connections'
+        ],
+        contact: {
+          person: 'Jennifer Lee',
+          position: 'Talent Solutions',
+          email: 'jennifer.lee@linkedin.com'
+        }
+      }
+    ];
+
+    // Load partner details
+    function loadPartnerDetails() {
+      const params = new URLSearchParams(window.location.search);
+      const partnerId = parseInt(params.get('id'));
+
+      if (partnerId) {
+        const partner = partnerData.find(p => p.id === partnerId);
+        if (partner) {
+          const categoryColor = partner.category === 'Platinum' ? '#FFD700' :
+            partner.category === 'Diamond' ? '#00CED1' : '#FFA500';
+
+          document.getElementById('partnerDetailContainer').innerHTML = `
+            <div style="background: linear-gradient(135deg, var(--primary-blue) 0%, var(--secondary-blue) 100%); color: white; padding: 3rem; border-radius: 10px; margin-bottom: 2rem; text-align: center;">
+              <div style="font-size: 80px; margin-bottom: 1rem;">🏢</div>
+              <h2>${partner.name}</h2>
+              <div style="background: ${categoryColor}; color: #333; display: inline-block; padding: 0.5rem 1.5rem; border-radius: 20px; font-weight: 600; margin-top: 1rem;">${partner.category} Partner</div>
+            </div>
+
+            <div class="grid grid-4" style="margin-bottom: 2rem; text-align: center;">
+              <div style="background: var(--light-bg); padding: 1.5rem; border-radius: 10px;">
+                <i class="fas fa-industry" style="font-size: 2rem; color: var(--primary-blue); margin-bottom: 0.8rem;"></i>
+                <p style="color: var(--gray-text); margin-bottom: 0.3rem;">Industry</p>
+                <p style="color: var(--primary-dark); font-weight: 600;">${partner.industry}</p>
+              </div>
+              <div style="background: var(--light-bg); padding: 1.5rem; border-radius: 10px;">
+                <i class="fas fa-handshake" style="font-size: 2rem; color: var(--primary-blue); margin-bottom: 0.8rem;"></i>
+                <p style="color: var(--gray-text); margin-bottom: 0.3rem;">Since</p>
+                <p style="color: var(--primary-dark); font-weight: 600;">${partner.established}</p>
+              </div>
+              <div style="background: var(--light-bg); padding: 1.5rem; border-radius: 10px;">
+                <i class="fas fa-globe" style="font-size: 2rem; color: var(--primary-blue); margin-bottom: 0.8rem;"></i>
+                <p style="color: var(--gray-text); margin-bottom: 0.3rem;">Website</p>
+                <a href="${partner.website}" target="_blank" style="color: var(--primary-blue); font-weight: 600; text-decoration: none;">Visit</a>
+              </div>
+              <div style="background: var(--light-bg); padding: 1.5rem; border-radius: 10px;">
+                <i class="fas fa-envelope" style="font-size: 2rem; color: var(--primary-blue); margin-bottom: 0.8rem;"></i>
+                <p style="color: var(--gray-text); margin-bottom: 0.3rem;">Email</p>
+                <a href="mailto:${partner.email}" style="color: var(--primary-blue); font-weight: 600; text-decoration: none;">Contact</a>
+              </div>
+            </div>
+
+            <div class="grid grid-2" style="margin-bottom: 2rem; gap: 2rem;">
+              <div>
+                <h4 style="color: var(--primary-dark); margin-bottom: 1rem;">About ${partner.name}</h4>
+                <p style="color: var(--gray-text); line-height: 1.6;">${partner.about}</p>
+              </div>
+              <div>
+                <h4 style="color: var(--primary-dark); margin-bottom: 1rem;">Partnership Contact</h4>
+                <div style="background: var(--light-bg); padding: 1.5rem; border-radius: 8px;">
+                  <p style="margin-bottom: 0.8rem;"><strong>${partner.contact.person}</strong></p>
+                  <p style="color: var(--accent-gold); margin-bottom: 0.8rem;">${partner.contact.position}</p>
+                  <a href="mailto:${partner.contact.email}" style="color: var(--primary-blue); text-decoration: none;">${partner.contact.email}</a>
+                </div>
+              </div>
+            </div>
+
+            <h3 style="color: var(--primary-dark); margin-bottom: 1rem;">Programs Offered</h3>
+            <div style="background: white; border: 2px solid var(--light-bg); padding: 2rem; border-radius: 10px; margin-bottom: 2rem;">
+              <div class="grid grid-2">
+                ${partner.programs.map(prog => `<div style="padding: 0.8rem; color: var(--gray-text);"><i class="fas fa-check-circle" style="color: var(--primary-blue); margin-right: 0.8rem;"></i>${prog}</div>`).join('')}
+              </div>
+            </div>
+
+            <h3 style="color: var(--primary-dark); margin-bottom: 1rem;">Student Benefits</h3>
+            <div class="grid grid-2" style="margin-bottom: 2rem;">
+              ${partner.benefits.map(benefit => `
+                <div class="card">
+                  <div style="padding: 1.5rem;">
+                    <i class="fas fa-star" style="color: var(--accent-gold); margin-right: 0.8rem;"></i><strong style="color: var(--primary-dark);">${benefit}</strong>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+
+            <div style="text-align: center; margin-top: 2rem;">
+              <a href="partners.html" class="btn" style="background: var(--primary-blue);">
+                <i class="fas fa-arrow-left"></i> Back to Partners
+              </a>
+            </div>
+          `;
+        }
+      } else {
+        // Show all partners grid
+        loadAllPartners();
+      }
+    }
+
+    // Load all partners
+    function loadAllPartners() {
+      const partnersGrid = document.getElementById('partnersGrid');
+      partnersGrid.innerHTML = partnerData.map(partner => `
+        <div class="card">
+          <div style="height: 200px; background: linear-gradient(135deg, var(--primary-blue) 0%, var(--secondary-blue) 100%); display: flex; align-items: center; justify-content: center;">
+            <i class="fas fa-building" style="font-size: 80px; color: rgba(255, 255, 255, 0.3);"></i>
+          </div>
+          <div style="padding: 1.5rem;">
+            <h4 style="color: var(--primary-dark); margin-bottom: 0.3rem;">${partner.name}</h4>
+            <p style="color: var(--accent-gold); font-weight: 600; font-size: 0.9rem; margin-bottom: 0.8rem;">${partner.category} Partner</p>
+            <p style="color: var(--gray-text); font-size: 0.9rem; margin-bottom: 1rem;">${partner.industry}</p>
+            <a href="partner-details.html?id=${partner.id}" class="btn" style="width: 100%; text-align: center; text-decoration: none;">View Details</a>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    window.addEventListener('load', loadPartnerDetails);
+  </script>
+</body>
+
+</html>

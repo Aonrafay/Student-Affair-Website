@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Society Details - Student Affairs</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+  <!-- Navigation Bar -->
+  <nav>
+    <div class="container">
+      <div class="logo">
+        <i class="fas fa-graduation-cap"></i> Student Affairs
+      </div>
+      <button class="nav-toggle">
+        <i class="fas fa-bars"></i>
+      </button>
+      <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="about-head.html">About Head</a></li>
+        <li><a href="team.html">Team</a></li>
+        <li><a href="societies.html">Societies</a></li>
+        <li><a href="events.html">Events</a></li>
+        <li><a href="ambassadors.html">Ambassadors</a></li>
+        <li><a href="partners.html">Partners</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1 id="societyTitle">Society Name</h1>
+      <p id="societyTagline">Loading...</p>
+    </div>
+  </section>
+
+  <!-- Hero Info Section -->
+  <section class="white-bg">
+    <div class="container">
+      <div style="background: var(--light-bg); padding: 2rem; border-radius: 10px; margin-bottom: 2rem;">
+        <div class="grid grid-3">
+          <div style="text-align: center;">
+            <i class="fas fa-users" style="font-size: 2rem; color: var(--primary-blue); margin-bottom: 0.5rem;"></i>
+            <p style="color: var(--gray-text); margin-bottom: 0.3rem;">Total Members</p>
+            <p id="membersCount" style="font-size: 1.5rem; color: var(--primary-dark); font-weight: 600;">150+</p>
+          </div>
+          <div style="text-align: center;">
+            <i class="fas fa-calendar-alt"
+              style="font-size: 2rem; color: var(--primary-blue); margin-bottom: 0.5rem;"></i>
+            <p style="color: var(--gray-text); margin-bottom: 0.3rem;">Founded</p>
+            <p id="foundedYear" style="font-size: 1.5rem; color: var(--primary-dark); font-weight: 600;">2020</p>
+          </div>
+          <div style="text-align: center;">
+            <i class="fas fa-star" style="font-size: 2rem; color: var(--primary-blue); margin-bottom: 0.5rem;"></i>
+            <p style="color: var(--gray-text); margin-bottom: 0.3rem;">Active Events</p>
+            <p id="activeEvents" style="font-size: 1.5rem; color: var(--primary-dark); font-weight: 600;">8+</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Motive/About Section -->
+  <section class="white-bg">
+    <div class="container">
+      <h2>About This Society</h2>
+      <div
+        style="background: white; border-left: 4px solid var(--accent-gold); padding: 2rem; border-radius: 5px; margin-bottom: 2rem;">
+        <h4 style="color: var(--primary-blue); margin-bottom: 1rem;">Our Motive</h4>
+        <p id="societyMotive" style="font-size: 1.05rem; line-height: 1.8; color: var(--gray-text);">
+          Loading motive...
+        </p>
+      </div>
+
+      <h3 style="margin-top: 2rem; margin-bottom: 1rem;">What We Do</h3>
+      <div class="grid grid-2" style="margin-bottom: 2rem;">
+        <div>
+          <ul style="list-style: none; padding-left: 0;">
+            <li style="margin-bottom: 1rem;"><i class="fas fa-check-circle"
+                style="color: var(--primary-blue); margin-right: 0.8rem;"></i><span id="feature1">Organize regular
+                meetings and workshops</span></li>
+            <li style="margin-bottom: 1rem;"><i class="fas fa-check-circle"
+                style="color: var(--primary-blue); margin-right: 0.8rem;"></i><span id="feature2">Host monthly events
+                and activities</span></li>
+            <li style="margin-bottom: 1rem;"><i class="fas fa-check-circle"
+                style="color: var(--primary-blue); margin-right: 0.8rem;"></i><span id="feature3">Provide mentorship
+                opportunities</span></li>
+          </ul>
+        </div>
+        <div>
+          <ul style="list-style: none; padding-left: 0;">
+            <li style="margin-bottom: 1rem;"><i class="fas fa-check-circle"
+                style="color: var(--primary-blue); margin-right: 0.8rem;"></i><span id="feature4">Collaborate with other
+                organizations</span></li>
+            <li style="margin-bottom: 1rem;"><i class="fas fa-check-circle"
+                style="color: var(--primary-blue); margin-right: 0.8rem;"></i><span id="feature5">Support community
+                initiatives</span></li>
+            <li style="margin-bottom: 1rem;"><i class="fas fa-check-circle"
+                style="color: var(--primary-blue); margin-right: 0.8rem;"></i><span id="feature6">Develop member skills
+                and talents</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Leadership Section -->
+  <section class="light-bg">
+    <div class="container">
+      <h2 class="text-center">Leadership Team</h2>
+
+      <!-- President -->
+      <div style="max-width: 400px; margin: 2rem auto; text-align: center;">
+        <div
+          style="background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); margin-bottom: 1rem;">
+          <div style="height: 250px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+            <img src="https://placehold.co/400x250/1B5E9E/FFFFFF?text=President+Picture" alt="President"
+              style="width: 100%; height: 100%; object-fit: cover;">
+          </div>
+          <div style="padding: 1.5rem;">
+            <h4 id="presidentName" style="color: var(--primary-dark); margin-bottom: 0.3rem;">Society President</h4>
+            <p style="color: var(--accent-gold); font-weight: 600; margin-bottom: 1rem;">Name</p>
+            <p id="presidentBio" style="color: var(--gray-text); font-size: 0.95rem; margin-bottom: 1rem;">
+              Leading the society with vision and dedication.
+            </p>
+            <p style="color: var(--gray-text); font-size: 0.9rem;">
+              <i class="fas fa-envelope" style="color: var(--primary-blue); margin-right: 0.5rem;"></i>
+              <a id="presidentEmail" href="mailto:president@university.edu"
+                style="color: var(--primary-blue); text-decoration: none;">president@university.edu</a>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vice President -->
+      <div style="max-width: 400px; margin: 2rem auto; text-align: center;">
+        <div
+          style="background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); margin-bottom: 1rem;">
+          <div style="height: 250px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+            <img src="https://placehold.co/400x250/2E8BC0/FFFFFF?text=Vice+President" alt="Vice President"
+              style="width: 100%; height: 100%; object-fit: cover;">
+          </div>
+          <div style="padding: 1.5rem;">
+            <h4 id="vicePresidentName" style="color: var(--primary-dark); margin-bottom: 0.3rem;">Vice President</h4>
+            <p style="color: var(--accent-gold); font-weight: 600; margin-bottom: 1rem;">Name</p>
+            <p id="vicePresidentBio" style="color: var(--gray-text); font-size: 0.95rem; margin-bottom: 1rem;">
+              Supporting leadership and organizing initiatives.
+            </p>
+            <p style="color: var(--gray-text); font-size: 0.9rem;">
+              <i class="fas fa-envelope" style="color: var(--primary-blue); margin-right: 0.5rem;"></i>
+              <a id="vicePresidentEmail" href="mailto:vicepresident@university.edu"
+                style="color: var(--primary-blue); text-decoration: none;">vicepresident@university.edu</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Team Members Section -->
+  <section class="white-bg">
+    <div class="container">
+      <h2 class="text-center">Team Members</h2>
+      <div class="grid grid-3" id="teamMembersGrid" style="margin-top: 2rem;">
+        <!-- Team members will be populated by JavaScript -->
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact & Join Section -->
+  <section class="dark-bg">
+    <div class="container">
+      <h2 class="text-center">Get Involved</h2>
+      <div class="grid grid-2" style="margin-top: 2rem; max-width: 900px; margin-left: auto; margin-right: auto;">
+        <div style="text-align: center;">
+          <i class="fas fa-envelope" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+          <h4 style="color: white; margin-bottom: 1rem;">Contact Us</h4>
+          <p style="margin-bottom: 1.5rem;">Have questions? Reach out to our team directly.</p>
+          <a href="#" class="btn" onclick="alert('Email: society@university.edu')">
+            <i class="fas fa-envelope"></i> Send Email
+          </a>
+        </div>
+        <div style="text-align: center;">
+          <i class="fas fa-user-plus" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+          <h4 style="color: white; margin-bottom: 1rem;">Join Our Society</h4>
+          <p style="margin-bottom: 1.5rem;">Membership is open to all students. Join us today!</p>
+          <a href="index.html" class="btn">
+            <i class="fas fa-arrow-right"></i> Back to Societies
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-container">
+      <div class="footer-grid">
+        <div class="footer-section">
+          <h4><i class="fas fa-graduation-cap"></i> Student Affairs</h4>
+          <p>Excellence in Innovation, Integrity in Action, Growth Through Community</p>
+          <div class="social-links">
+            <a href="#" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+            <a href="#" title="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="#" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+            <a href="#" title="Twitter"><i class="fab fa-twitter"></i></a>
+          </div>
+        </div>
+
+        <div class="footer-section">
+          <h4>Quick Links</h4>
+          <ul>
+            <li><a href="about-head.html">About Head</a></li>
+            <li><a href="societies.html">Societies</a></li>
+            <li><a href="events.html">Events</a></li>
+            <li><a href="ambassadors.html">Ambassadors</a></li>
+            <li><a href="partners.html">Partners</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-section">
+          <h4>Contact</h4>
+          <ul>
+            <li>📧 <a href="mailto:Studentaffairs@niit.edu.pk">Studentaffairs@niit.edu.pk</a></li>
+            <li>📞 +92 320 9420156</li>
+            <li>📍 NASTP DELTA Lahore, Building DELTA 3</li>
+            <li>Monday - Friday, 9 AM - 5 PM</li>
+          </ul>
+        </div>
+
+        <div class="footer-section">
+          <h4>Follow Our Journey</h4>
+          <p>Subscribe to our newsletter for updates on events and opportunities.</p>
+          <form style="margin-top: 1rem;">
+            <input type="email" placeholder="Your email"
+              style="width: 100%; padding: 0.5rem; border: none; border-radius: 3px; margin-bottom: 0.5rem;">
+            <button type="submit" class="btn" style="width: 100%; margin: 0;">Subscribe</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>&copy; 2025 Student Affairs Department. All rights reserved. | <a href="#"
+            style="color: var(--accent-gold);">Privacy Policy</a> | <a href="#" style="color: var(--accent-gold);">Terms
+            of Service</a></p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/script.js"></script>
+  <script>
+    // Sample society data
+    const societyData = {
+      1: {
+        title: 'Social Services Society',
+        tagline: 'Making a Difference Through Community Service',
+        members: '150+',
+        founded: '2019',
+        events: '12+',
+        motive: 'Our society is dedicated to creating positive social impact through community service, welfare initiatives, and volunteer programs. We believe in the power of collective action to address social issues and improve lives.',
+        features: [
+          'Organize regular community outreach programs',
+          'Run educational workshops and awareness campaigns',
+          'Coordinate volunteer opportunities',
+          'Support underprivileged communities'
+        ],
+        president: { name: 'Ahmed Hassan', email: 'ahmedh@university.edu', bio: 'Passionate about social welfare and community development with 3 years of leadership experience.' },
+        vicePresident: { name: 'Fatima Khan', email: 'fatimak@university.edu', bio: 'Focused on organizing impactful social initiatives and growing our volunteer base.' },
+        team: [
+          { name: 'Ali Raza', role: 'Events Coordinator' },
+          { name: 'Zara Malik', role: 'Volunteer Manager' },
+          { name: 'Hassan Ahmed', role: 'Secretary' }
+        ]
+      },
+      2: {
+        title: 'X-Society',
+        tagline: 'Innovation Hub for Tech Enthusiasts',
+        members: '200+',
+        founded: '2021',
+        events: '15+',
+        motive: 'X-Society is an innovation ecosystem where tech enthusiasts come together to explore cutting-edge technologies, collaborate on projects, and push the boundaries of what\'s possible.',
+        features: [
+          'Host tech talks and workshops',
+          'Organize hackathons and coding competitions',
+          'Facilitate project collaboration',
+          'Connect with industry professionals'
+        ],
+        president: { name: 'Ali Siddiqui', email: 'alis@university.edu', bio: 'Technology innovator passionate about emerging tech and mentoring the next generation.' },
+        vicePresident: { name: 'Ayesha Khan', email: 'ayesha@university.edu', bio: 'Dedicated to fostering innovation and organizing technical events.' },
+        team: [
+          { name: 'Omar Tech', role: 'Technical Lead' },
+          { name: 'Sophia Lee', role: 'Event Manager' },
+          { name: 'Rahul Singh', role: 'Communications' }
+        ]
+      },
+      3: {
+        title: 'Sports Society',
+        tagline: 'Promoting Fitness and Athletic Excellence',
+        members: '250+',
+        founded: '2018',
+        events: '20+',
+        motive: 'Our sports society promotes physical fitness, teamwork, and competitive excellence. We organize tournaments, training sessions, and fitness programs to inspire a healthy and active lifestyle.',
+        features: [
+          'Organize inter-university tournaments',
+          'Conduct fitness training programs',
+          'Manage college sports teams',
+          'Host motivational fitness events'
+        ],
+        president: { name: 'Hassan Ali', email: 'hassana@university.edu', bio: 'Sports enthusiast with experience in athletics and team management.' },
+        vicePresident: { name: 'Maria Santos', email: 'maria@university.edu', bio: 'Dedicated to promoting sports and organizing competitive events.' },
+        team: [
+          { name: 'John Douglas', role: 'Training Director' },
+          { name: 'Nina Patel', role: 'Event Organizer' },
+          { name: 'Ahmed Karim', role: 'Team Coordinator' }
+        ]
+      },
+      4: {
+        title: 'Performing Arts Society',
+        tagline: 'Celebrating Creative Expression',
+        members: '180+',
+        founded: '2020',
+        events: '10+',
+        motive: 'The Performing Arts Society celebrates creativity through music, dance, drama, and other art forms. We provide a platform for students to showcase their talents and explore new artistic expressions.',
+        features: [
+          'Organize recitals and performances',
+          'Conduct drama and music workshops',
+          'Host talent showcase events',
+          'Support artistic experimentation'
+        ],
+        president: { name: 'Sophia Khan', email: 'sophiak@university.edu', bio: 'Artist and performer dedicated to nurturing creative talent in our community.' },
+        vicePresident: { name: 'Alex Turner', email: 'alex@university.edu', bio: 'Passionate about performing arts and student development.' },
+        team: [
+          { name: 'Luna Bright', role: 'Performance Director' },
+          { name: 'Marcus Chen', role: 'Technical Producer' },
+          { name: 'Priya Sharma', role: 'Workshop Coordinator' }
+        ]
+      },
+      5: {
+        title: 'Media Society',
+        tagline: 'Telling Impactful Stories',
+        members: '120+',
+        founded: '2019',
+        events: '8+',
+        motive: 'Our media society creates compelling content and tells powerful stories. We produce videos, podcasts, and multimedia content that inform, inspire, and engage our community.',
+        features: [
+          'Produce educational videos and documentaries',
+          'Publish newsletters and articles',
+          'Host podcast series',
+          'Conduct media workshops'
+        ],
+        president: { name: 'David Chen', email: 'david@university.edu', bio: 'Content creator and journalist dedicated to impactful storytelling.' },
+        vicePresident: { name: 'Emma Watson', email: 'emma@university.edu', bio: 'Media professional focused on quality content production and outreach.' },
+        team: [
+          { name: 'Leo Franco', role: 'Video Director' },
+          { name: 'Claire Bennett', role: 'Editor' },
+          { name: 'Jacob Park', role: 'Producer' }
+        ]
+      },
+      6: {
+        title: 'Literary Society',
+        tagline: 'Promoting Reading and Writing',
+        members: '100+',
+        founded: '2017',
+        events: '12+',
+        motive: 'The Literary Society celebrates the power of words through reading groups, writing workshops, and literary discussions. We foster intellectual growth and creative expression through literature.',
+        features: [
+          'Organize book clubs and reading discussions',
+          'Conduct creative writing workshops',
+          'Publish student literary magazine',
+          'Host author talks and literary events'
+        ],
+        president: { name: 'Rachel Green', email: 'rachel@university.edu', bio: 'Author and literature enthusiast dedicated to literary excellence.' },
+        vicePresident: { name: 'James Wilson', email: 'james@university.edu', bio: 'Passionate about promoting literacy and creative writing.' },
+        team: [
+          { name: 'Mira Kapoor', role: 'Magazine Editor' },
+          { name: 'Robert Blake', role: 'Event Coordinator' },
+          { name: 'Iris Chen', role: 'Workshop Facilitator' }
+        ]
+      },
+      7: {
+        title: 'Explorer Club',
+        tagline: 'Adventure and Discovery Awaits',
+        members: '140+',
+        founded: '2020',
+        events: '6+',
+        motive: 'The Explorer Club encourages adventure, outdoor activities, and environmental appreciation. We organize expeditions, hiking trips, and nature-based activities to connect students with the outdoors.',
+        features: [
+          'Organize hiking and trekking expeditions',
+          'Conduct survival skill workshops',
+          'Lead environmental conservation projects',
+          'Arrange team-building outdoor activities'
+        ],
+        president: { name: 'Marcus Stone', email: 'marcus@university.edu', bio: 'Adventure enthusiast with extensive outdoor experience and conservation passion.' },
+        vicePresident: { name: 'Elena Rivera', email: 'elena@university.edu', bio: 'Focused on safe outdoor experiences and environmental adventure.' },
+        team: [
+          { name: 'Carlos Lopez', role: 'Trip Coordinator' },
+          { name: 'Sophie Turner', role: 'Safety Officer' },
+          { name: 'Ravi Patel', role: 'Conservation Lead' }
+        ]
+      },
+      8: {
+        title: 'Al-Mohsenin Society',
+        tagline: 'Faith-Based Community Building',
+        members: '170+',
+        founded: '2018',
+        events: '14+',
+        motive: 'Al-Mohsenin Society brings together students to strengthen faith, foster moral values, and build a supportive faith-based community. We organize spiritual events and community service programs.',
+        features: [
+          'Organize religious education programs',
+          'Conduct community service projects',
+          'Host spiritual discussion forums',
+          'Arrange interfaith dialogue events'
+        ],
+        president: { name: 'Ibrahim Ahmed', email: 'ibrahim@university.edu', bio: 'Faith leader dedicated to building a compassionate and inclusive community.' },
+        vicePresident: { name: 'Mariam Hassan', email: 'mariam@university.edu', bio: 'Committed to community service and spiritual growth.' },
+        team: [
+          { name: 'Noor Khan', role: 'Program Coordinator' },
+          { name: 'Abdullah Malik', role: 'Community Service Lead' },
+          { name: 'Amira Hassan', role: 'Communications' }
+        ]
+      }
+    };
+
+    // Load society data from URL parameter
+    function loadSocietyDetails() {
+      const params = new URLSearchParams(window.location.search);
+      const societyId = parseInt(params.get('id')) || 1;
+      const data = societyData[societyId];
+
+      if (data) {
+        document.getElementById('societyTitle').textContent = data.title;
+        document.getElementById('societyTagline').textContent = data.tagline;
+        document.getElementById('membersCount').textContent = data.members;
+        document.getElementById('foundedYear').textContent = data.founded;
+        document.getElementById('activeEvents').textContent = data.events;
+        document.getElementById('societyMotive').textContent = data.motive;
+        document.getElementById('presidentName').textContent = data.president.name;
+        document.getElementById('presidentEmail').href = `mailto:${data.president.email}`;
+        document.getElementById('presidentEmail').textContent = data.president.email;
+        document.getElementById('presidentBio').textContent = data.president.bio;
+        document.getElementById('vicePresidentName').textContent = data.vicePresident.name;
+        document.getElementById('vicePresidentEmail').href = `mailto:${data.vicePresident.email}`;
+        document.getElementById('vicePresidentEmail').textContent = data.vicePresident.email;
+        document.getElementById('vicePresidentBio').textContent = data.vicePresident.bio;
+
+        // Update features
+        data.features.forEach((feature, index) => {
+          const element = document.getElementById(`feature${index + 1}`);
+          if (element) element.textContent = feature;
+        });
+
+        // Populate team members
+        const teamGrid = document.getElementById('teamMembersGrid');
+        teamGrid.innerHTML = data.team.map(member => `
+          <div class="card">
+            <div style="height: 200px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+              <img src="https://placehold.co/400x200/1B5E9E/FFFFFF?text=${encodeURIComponent(member.name)}" alt="${member.name}" style="width: 100%; height: 100%; object-fit: cover;">
+            </div>
+            <div style="padding: 1.5rem; text-align: center;">
+              <h4 style="color: var(--primary-dark); margin-bottom: 0.3rem;">${member.name}</h4>
+              <p style="color: var(--primary-blue); font-weight: 600; font-size: 0.95rem;">${member.role}</p>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    // Call the function when page loads
+    window.addEventListener('load', loadSocietyDetails);
+  </script>
+</body>
+
+</html>

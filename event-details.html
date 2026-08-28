@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Details - Student Affairs</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+  <!-- Navigation Bar -->
+  <nav>
+    <div class="container">
+      <div class="logo">
+        <i class="fas fa-graduation-cap"></i> Student Affairs
+      </div>
+      <button class="nav-toggle">
+        <i class="fas fa-bars"></i>
+      </button>
+      <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="about-head.html">About Head</a></li>
+        <li><a href="team.html">Team</a></li>
+        <li><a href="societies.html">Societies</a></li>
+        <li><a href="events.html">Events</a></li>
+        <li><a href="ambassadors.html">Ambassadors</a></li>
+        <li><a href="partners.html">Partners</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1 id="eventTitle">Event Title</h1>
+      <p id="eventStatus">Loading...</p>
+    </div>
+  </section>
+
+  <!-- Event Info Section -->
+  <section class="light-bg">
+    <div class="container">
+      <div style="background: white; padding: 2rem; border-radius: 10px; margin-bottom: 2rem;">
+        <div class="grid grid-2">
+          <div>
+            <h4 style="color: var(--primary-blue); margin-bottom: 1rem;">📅 Date & Time</h4>
+            <p id="eventDateTime" style="color: var(--gray-text); font-size: 1.1rem;">Loading...</p>
+
+            <h4 style="color: var(--primary-blue); margin-bottom: 1rem; margin-top: 1.5rem;">📍 Location</h4>
+            <p id="eventLocation" style="color: var(--gray-text); font-size: 1.1rem;">Loading...</p>
+          </div>
+          <div>
+            <h4 style="color: var(--primary-blue); margin-bottom: 1rem;">👥 Participants</h4>
+            <p id="eventParticipants" style="color: var(--gray-text); font-size: 1.1rem;">300+ Students</p>
+
+            <h4 style="color: var(--primary-blue); margin-bottom: 1rem; margin-top: 1.5rem;">🎯 Organizer</h4>
+            <p id="eventOrganizer" style="color: var(--gray-text); font-size: 1.1rem;">Student Affairs</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Event Description -->
+  <section class="white-bg">
+    <div class="container">
+      <h2>About This Event</h2>
+      <p id="eventDescription" style="color: var(--gray-text); line-height: 1.8; font-size: 1.05rem;">
+        Loading event description...
+      </p>
+
+      <h3 style="margin-top: 2rem; margin-bottom: 1rem;">Highlights</h3>
+      <ul style="list-style: none; padding-left: 0; color: var(--gray-text);">
+        <li style="margin-bottom: 0.8rem;" id="highlight1"><i class="fas fa-star"
+            style="color: var(--accent-gold); margin-right: 0.8rem;"></i>Highlight 1</li>
+        <li style="margin-bottom: 0.8rem;" id="highlight2"><i class="fas fa-star"
+            style="color: var(--accent-gold); margin-right: 0.8rem;"></i>Highlight 2</li>
+        <li style="margin-bottom: 0.8rem;" id="highlight3"><i class="fas fa-star"
+            style="color: var(--accent-gold); margin-right: 0.8rem;"></i>Highlight 3</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Gallery Section -->
+  <section class="light-bg">
+    <div class="container">
+      <h2 class="text-center">Event Gallery</h2>
+      <div class="grid grid-3" id="galleryGrid" style="margin-top: 2rem;">
+        <!-- Gallery images will be populated by JavaScript -->
+        <div style="text-align: center; grid-column: 1 / -1;">
+          <p style="color: var(--gray-text); padding: 3rem;">Photo gallery loading...</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Winners & Results Section -->
+  <section class="white-bg">
+    <div class="container">
+      <h2 class="text-center" style="margin-bottom: 2rem;">Winners & Results</h2>
+
+      <!-- Winners Grid -->
+      <div id="winnersSection">
+        <div class="grid grid-3" id="winnersGrid">
+          <!-- Winners will be populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Event Stats -->
+  <section class="light-bg">
+    <div class="container">
+      <h2 class="text-center">Event Statistics</h2>
+      <div class="grid grid-4" style="margin-top: 2rem; text-align: center;">
+        <div>
+          <h4 style="font-size: 2rem; color: var(--primary-blue); margin-bottom: 0.5rem;" id="totalAttendees">300+</h4>
+          <p style="color: var(--gray-text);">Total Attendees</p>
+        </div>
+        <div>
+          <h4 style="font-size: 2rem; color: var(--primary-blue); margin-bottom: 0.5rem;" id="totalParticipants">50+
+          </h4>
+          <p style="color: var(--gray-text);">Active Participants</p>
+        </div>
+        <div>
+          <h4 style="font-size: 2rem; color: var(--primary-blue); margin-bottom: 0.5rem;" id="satisfactionRate">95%</h4>
+          <p style="color: var(--gray-text);">Satisfaction Rate</p>
+        </div>
+        <div>
+          <h4 style="font-size: 2rem; color: var(--primary-blue); margin-bottom: 0.5rem;" id="prizePool">$5000+</h4>
+          <p style="color: var(--gray-text);">Total Prizes</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feedback Section -->
+  <section class="white-bg">
+    <div class="container">
+      <h2 class="text-center">Participant Feedback</h2>
+      <div class="grid grid-2" style="margin-top: 2rem;">
+        <div class="card">
+          <div style="padding: 1.5rem;">
+            <div style="display: flex; gap: 0.3rem; margin-bottom: 1rem;">
+              <i class="fas fa-star" style="color: var(--accent-gold);"></i>
+              <i class="fas fa-star" style="color: var(--accent-gold);"></i>
+              <i class="fas fa-star" style="color: var(--accent-gold);"></i>
+              <i class="fas fa-star" style="color: var(--accent-gold);"></i>
+              <i class="fas fa-star" style="color: var(--accent-gold);"></i>
+            </div>
+            <p style="color: var(--gray-text); margin-bottom: 1rem;">"One of the best events I've attended! Great
+              speakers and amazing networking opportunities."</p>
+            <p style="color: var(--primary-blue); font-weight: 600;">Ahmed Hassan - CS Student</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="padding: 1.5rem;">
+            <div style="display: flex; gap: 0.3rem; margin-bottom: 1rem;">
+              <i class="fas fa-star" style="color: var(--accent-gold);"></i>
+              <i class="fas fa-star" style="color: var(--accent-gold);"></i>
+              <i class="fas fa-star" style="color: var(--accent-gold);"></i>
+              <i class="fas fa-star" style="color: var(--accent-gold);"></i>
+              <i class="fas fa-star" style="color: var(--accent-gold);"></i>
+            </div>
+            <p style="color: var(--gray-text); margin-bottom: 1rem;">"Learned so much from the industry professionals.
+              Definitely worth attending!"</p>
+            <p style="color: var(--primary-blue); font-weight: 600;">Zainab Malik - SE Student</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="dark-bg">
+    <div class="container text-center">
+      <h2>Looking for More Events?</h2>
+      <p style="max-width: 600px; margin: 1rem auto; font-size: 1.1rem;">
+        Check out our calendar for upcoming events and be part of the exciting activities happening on campus.
+      </p>
+      <div style="margin-top: 2rem;">
+        <a href="events.html" class="btn">
+          <i class="fas fa-calendar"></i> View All Events
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-container">
+      <div class="footer-grid">
+        <div class="footer-section">
+          <h4><i class="fas fa-graduation-cap"></i> Student Affairs</h4>
+          <p>Excellence in Innovation, Integrity in Action, Growth Through Community</p>
+          <div class="social-links">
+            <a href="#" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+            <a href="#" title="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="#" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+            <a href="#" title="Twitter"><i class="fab fa-twitter"></i></a>
+          </div>
+        </div>
+
+        <div class="footer-section">
+          <h4>Quick Links</h4>
+          <ul>
+            <li><a href="about-head.html">About Head</a></li>
+            <li><a href="societies.html">Societies</a></li>
+            <li><a href="events.html">Events</a></li>
+            <li><a href="ambassadors.html">Ambassadors</a></li>
+            <li><a href="partners.html">Partners</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-section">
+          <h4>Contact</h4>
+          <ul>
+            <li>📧 <a href="mailto:Studentaffairs@niit.edu.pk">Studentaffairs@niit.edu.pk</a></li>
+            <li>📞 +92 320 9420156</li>
+            <li>📍 NASTP DELTA Lahore, Building DELTA 3</li>
+            <li>Monday - Friday, 9 AM - 5 PM</li>
+            
+          </ul>
+        </div>
+
+        <div class="footer-section">
+          <h4>Follow Our Journey</h4>
+          <p>Subscribe to our newsletter for updates on events and opportunities.</p>
+          <form style="margin-top: 1rem;">
+            <input type="email" placeholder="Your email"
+              style="width: 100%; padding: 0.5rem; border: none; border-radius: 3px; margin-bottom: 0.5rem;">
+            <button type="submit" class="btn" style="width: 100%; margin: 0;">Subscribe</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>&copy; 2025 Student Affairs Department. All rights reserved. | <a href="#"
+            style="color: var(--accent-gold);">Privacy Policy</a> | <a href="#" style="color: var(--accent-gold);">Terms
+            of Service</a></p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/script.js"></script>
+  <script>
+    // Event data
+    const eventData = {
+      1: {
+        title: 'Annual Symposium 2025',
+        status: 'Upcoming',
+        date: 'April 25, 2025',
+        time: '2:00 PM',
+        location: 'Main Auditorium',
+        participants: '500+ Students',
+        organizer: 'Student Affairs Office',
+        description: 'The Annual Symposium is our flagship event bringing together students from all disciplines to celebrate achievements, share innovations, and build connections. This year\'s theme focuses on "Technology for Social Good" with keynote speakers from leading tech companies, panel discussions, and interactive sessions.',
+        highlights: [
+          'Keynote addresses from industry leaders',
+          'Interactive technical workshops and demos',
+          'Networking sessions with professionals'
+        ],
+        winners: [
+          { position: '1st Place', name: 'Innovation Project Team', prize: '$2000', icon: '🥇' },
+          { position: '2nd Place', name: 'Tech Solution Group', prize: '$1000', icon: '🥈' },
+          { position: '3rd Place', name: 'Future Leaders Club', prize: '$500', icon: '🥉' }
+        ],
+        totalAttendees: '500+',
+        activeParticipants: '120+',
+        satisfaction: '97%',
+        prizePool: '$5000'
+      },
+      2: {
+        title: 'Hackathon 2025',
+        status: 'Upcoming',
+        date: 'May 5, 2025',
+        time: '10:00 AM',
+        location: 'Innovation Lab',
+        participants: '200+ Participants',
+        organizer: 'X-Society & Student Affairs',
+        description: 'A 24-hour coding marathon where students showcase their programming prowess. Teams will tackle real-world problems provided by industry partners. This is an excellent opportunity to demonstrate technical skills, collaborate with peers, and gain recognition in the tech community.',
+        highlights: [
+          '24-hour coding challenge',
+          'Prizes and internship opportunities',
+          'Industry mentors available throughout'
+        ],
+        winners: [
+          { position: 'Grand Prize', name: 'CodeMasters Team', prize: '$3000', icon: '🏆' },
+          { position: 'Best UI/UX', name: 'Design Innovators', prize: '$1000', icon: '🎨' },
+          { position: 'Most Creative', name: 'Think Different', prize: '$800', icon: '💡' }
+        ],
+        totalAttendees: '250+',
+        activeParticipants: '180+',
+        satisfaction: '96%',
+        prizePool: '$7500'
+      },
+      3: {
+        title: 'Career Fair 2025',
+        status: 'Upcoming',
+        date: 'May 15, 2025',
+        time: '3:30 PM',
+        location: 'Campus Ground',
+        participants: '800+ Students',
+        organizer: 'Career Development Office',
+        description: 'Connect directly with leading technology companies recruiting for internships and full-time positions. Explore diverse career paths, learn about company cultures, and network with hiring managers and alumni working in tech.',
+        highlights: [
+          '50+ Top companies participating',
+          'Resume review sessions',
+          'Mock interviews with professionals'
+        ],
+        winners: [
+          { position: 'Best Booth', name: 'Google', prize: 'Recognition', icon: '⭐' },
+          { position: 'Most Job Offers', name: 'Microsoft Teams', prize: 'Recognition', icon: '⭐' },
+          { position: 'Best Engagement', name: 'Meta', prize: 'Recognition', icon: '⭐' }
+        ],
+        totalAttendees: '800+',
+        activeParticipants: '600+',
+        satisfaction: '94%',
+        prizePool: 'Multiple Job Offers'
+      },
+      101: {
+        title: 'Spring Summit 2025',
+        status: 'Completed',
+        date: 'March 15, 2025',
+        time: '2:00 PM',
+        location: 'Main Auditorium',
+        participants: '300+ Students',
+        organizer: 'Student Affairs Office',
+        description: 'A highly successful gathering of 300+ students discussing emerging tech trends. Keynote speakers from Google and Microsoft shared insights on AI, cloud computing, and career opportunities in technology.',
+        highlights: [
+          'Google and Microsoft keynotes',
+          'Breakout sessions on emerging tech',
+          'Student startup showcase'
+        ],
+        winners: [
+          { position: 'Best Startup Idea', name: 'EduTech Solutions', prize: 'Funding Opportunity', icon: '🚀' },
+          { position: 'Best Presentation', name: 'Sarah Ahmed', prize: 'Internship', icon: '⭐' },
+          { position: 'Audience Favorite', name: 'Tech for Good Initiative', prize: 'Recognition', icon: '❤️' }
+        ],
+        totalAttendees: '300+',
+        activeParticipants: '85+',
+        satisfaction: '95%',
+        prizePool: '$2000'
+      }
+    };
+
+    // Load event data
+    function loadEventDetails() {
+      const params = new URLSearchParams(window.location.search);
+      const eventId = parseInt(params.get('id')) || 1;
+      const data = eventData[eventId];
+
+      if (data) {
+        document.getElementById('eventTitle').textContent = data.title;
+        document.getElementById('eventStatus').textContent = data.status;
+        document.getElementById('eventDateTime').textContent = `${data.date} at ${data.time}`;
+        document.getElementById('eventLocation').textContent = data.location;
+        document.getElementById('eventParticipants').textContent = data.participants;
+        document.getElementById('eventOrganizer').textContent = data.organizer;
+        document.getElementById('eventDescription').textContent = data.description;
+        document.getElementById('totalAttendees').textContent = data.totalAttendees;
+        document.getElementById('totalParticipants').textContent = data.activeParticipants;
+        document.getElementById('satisfactionRate').textContent = data.satisfaction;
+        document.getElementById('prizePool').textContent = data.prizePool;
+
+        // Load highlights
+        data.highlights.forEach((highlight, index) => {
+          const elem = document.getElementById(`highlight${index + 1}`);
+          if (elem) {
+            elem.innerHTML = `<i class="fas fa-star" style="color: var(--accent-gold); margin-right: 0.8rem;"></i>${highlight}`;
+          }
+        });
+
+        // Load winners
+        const winnersGrid = document.getElementById('winnersGrid');
+        winnersGrid.innerHTML = data.winners.map((winner, index) => `
+          <div class="card">
+            <div style="padding: 2rem; text-align: center; background: linear-gradient(135deg, var(--primary-blue) 0%, var(--secondary-blue) 100%); color: white;">
+              <div style="font-size: 3rem; margin-bottom: 1rem;">${winner.icon}</div>
+              <h4 style="color: white; margin-bottom: 0.5rem;">${winner.position}</h4>
+              <p style="font-weight: 600; margin-bottom: 1rem;">${winner.name}</p>
+              <p style="background: rgba(255, 255, 255, 0.2); padding: 0.5rem; border-radius: 5px;">Prize: ${winner.prize}</p>
+            </div>
+          </div>
+        `).join('');
+
+        // Load gallery
+        const galleryGrid = document.getElementById('galleryGrid');
+        const galleryImages = [
+          { title: 'Event Highlights', icon: 'fas fa-image' },
+          { title: 'Keynote Session', icon: 'fas fa-microphone' },
+          { title: 'Panel Discussion', icon: 'fas fa-comments' },
+          { title: 'Networking Session', icon: 'fas fa-users' },
+          { title: 'Awards Ceremony', icon: 'fas fa-trophy' },
+          { title: 'Group Photo', icon: 'fas fa-camera' }
+        ];
+
+        galleryGrid.innerHTML = galleryImages.map(img => `
+          <div style="border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); cursor: pointer; transition: transform 0.3s;">
+            <div style="height: 250px; background: linear-gradient(135deg, var(--primary-blue) 0%, var(--secondary-blue) 100%); display: flex; align-items: center; justify-content: center;">
+              <i class="${img.icon}" style="font-size: 4rem; color: rgba(255, 255, 255, 0.3);"></i>
+            </div>
+            <div style="padding: 1rem; background: white;">
+              <p style="color: var(--primary-dark); font-weight: 600;">${img.title}</p>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    window.addEventListener('load', loadEventDetails);
+  </script>
+</body>
+
+</html>
