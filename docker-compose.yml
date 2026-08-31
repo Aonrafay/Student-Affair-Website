@@ -1,0 +1,58 @@
+version: "3.9"
+
+# Student Affairs CMS — MySQL 8 + Express app.
+# The app runs migrations and seeds a working office on first boot, then
+# serves everything under BASE_PATH (default /student-affairs).
+#
+#   docker compose up --build
+#   Site:  http://localhost:5000/student-affairs/
+#   Admin: http://localhost:5000/student-affairs/admin/login
+
+services:
+  db:
+    image: mysql:8
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: student_affairs
+      MYSQL_USER: sa
+      MYSQL_PASSWORD: sa
+      MYSQL_ROOT_PASSWORD: root
+      TZ: UTC
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      # mysqladmin ping validates the server is accepting connections.
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-usa", "-psa"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+      BASE_PATH: /student-affairs
+      JWT_SECRET: change-this-in-production-please
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: sa
+      DB_PASSWORD: sa
+      DB_NAME: student_affairs
+      # Seed accounts on first boot — change these before deploying.
+      ADMIN_EMAIL: admin@niit.edu.pk
+      ADMIN_PASSWORD: admin123
+      EDITOR_EMAIL: editor@niit.edu.pk
+      EDITOR_PASSWORD: editor123
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+
+volumes:
+  db_data:
+  uploads_data:
