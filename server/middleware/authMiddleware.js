@@ -1,33 +1,49 @@
-const jwt = require('jsonwebtoken');
+'use strict';
 
-const protect = (req, res, next) => {
-  let token;
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
-    try {
-      token = req.headers.authorization.split(' ')[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = decoded; // add user id/role to request
-      next();
-    } catch (error) {
-      console.error(error);
-      res.status(401).json({ message: 'Not authorized, token failed' });
-    }
-  }
+const { verify } = require('./auth');
+const { qOne } = require('../config/db');
 
+/**
+ * Require a valid `Authorization: Bearer <token>` header.
+ * Sets `req.user` to the fresh user row (id, name, email, role).
+ */
+async function protect(req, res, next) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) {
-    res.status(401).json({ message: 'Not authorized, no token' });
+    return res.status(401).json({ error: 'Authentication required. Please sign in.' });
   }
-};
-
-const admin = (req, res, next) => {
-  if (req.user && req.user.role === 'admin') {
+  try {
+    const payload = verify(token);
+    const user = await qOne(
+      'SELECT id, name, email, role, created_at FROM users WHERE id = ?',
+      [payload.id]
+    );
+    if (!user) {
+      return res.status(401).json({ error: 'Account no longer exists.' });
+    }
+    req.user = user;
     next();
-  } else {
-    res.status(403).json({ message: 'Not authorized as an admin' });
+  } catch (e) {
+    return res.status(401).json({ error: 'Invalid or expired session. Please sign in again.' });
   }
-};
+}
 
-module.exports = { protect, admin };
+/** Restrict a route to one or more roles (after `protect`). */
+function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'You do not have access to this area.' });
+    }
+    next();
+  };
+}
+
+/** Restrict a route to the roles allowed for a module definition. */
+function requireModuleRole(moduleDef) {
+  const roles = moduleDef.roles || ['admin'];
+  return requireRole(...roles);
+}
+
+module.exports = { protect, requireRole, requireModuleRole };

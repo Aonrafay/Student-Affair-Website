@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin — Office of Student Affairs</title>
+  <link rel="stylesheet" href="__BASE_PATH__/admin/css/admin.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="side-brand">
+        <span class="logo-mark">SA</span>
+        <div><b>Student Affairs</b><span>CMS</span></div>
+      </div>
+      <nav id="sidebar-nav" aria-label="Admin sections"></nav>
+      <div class="side-foot">
+        <div id="who" class="who"></div>
+        <button class="btn ghost tiny" id="signout">Sign out</button>
+      </div>
+    </aside>
+
+    <main class="main" id="view">
+      <div class="state"><div class="spinner"></div><p>Loading…</p></div>
+    </main>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="__BASE_PATH__/config.js"></script>
+  <script src="__BASE_PATH__/admin/js/auth.js"></script>
+  <script src="__BASE_PATH__/admin/js/modules.js"></script>
+  <script src="__BASE_PATH__/admin/js/admin.js"></script>
+</body>
+</html>

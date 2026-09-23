@@ -1,0 +1,14 @@
+for docker:
+docker compose up --build
+http://localhost:5000/student-affairs/
+http://localhost:5000/student-affairs/admin/login
+
+for manually:
+cp .env.example .env
+# then edit the DB_* values in .env if needed
+npm --prefix server install
+npm run migrate
+npm run seed
+npm run dev
+http://localhost:5000/student-affairs/
+http://localhost:5000/student-affairs/admin/login
