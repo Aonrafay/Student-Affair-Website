@@ -38,20 +38,27 @@
       return '<a href="' + href + '"' + (active ? ' class="active"' : '') + '>' + SA.esc(item[1]) + '</a>';
     }).join('');
 
+    // The class is what site.css styles — without it the header has no chrome,
+    // the nav links lose their contrast and the mobile dropdown anchors to the
+    // wrong container (site.css `.site-nav { position: absolute; top: 100% }`).
+    header.className = 'site-header';
     header.innerHTML =
+      '<a class="skip-link" href="#page-root">Skip to main content</a>' +
       '<div class="top-strip">' +
         '<div class="container">' +
           '<span class="strip-left"><b>NIIT</b> &middot; NASTP Institute of Information Technology &middot; A Constituent College of Air University, Islamabad</span>' +
           '<span class="top-strip-right" id="strip-contact"><span>Loading contact…</span></span>' +
         '</div>' +
       '</div>' +
-      '<div class="container header-main">' +
-        '<a class="brand" href="' + SA.BASE + '/" aria-label="Student Affairs — home">' +
-          '<span class="brand-mark">SA</span>' +
-          '<span>Student Affairs<small>Office of Student Affairs</small></span>' +
-        '</a>' +
-        '<nav class="site-nav" id="site-nav" aria-label="Main navigation">' + navHtml + '</nav>' +
-        '<button class="nav-toggle" id="nav-toggle" aria-label="Toggle menu" aria-expanded="false">&#9776;</button>' +
+      '<div class="header-bar">' +
+        '<div class="container header-main">' +
+          '<a class="brand" href="' + SA.BASE + '/" aria-label="Student Affairs — home">' +
+            '<span class="brand-mark">SA</span>' +
+            '<span>Student Affairs<small>Office of Student Affairs</small></span>' +
+          '</a>' +
+          '<nav class="site-nav" id="site-nav" aria-label="Main navigation">' + navHtml + '</nav>' +
+          '<button class="nav-toggle" id="nav-toggle" aria-label="Toggle menu" aria-expanded="false">&#9776;</button>' +
+        '</div>' +
       '</div>';
   }
 
@@ -59,6 +66,9 @@
     const footer = document.getElementById('site-footer');
     if (!footer) return;
     const s = settings || {};
+    // Same as the header: the class is required for site.css to style (and
+    // colour) the footer — without it the links render white on the page bg.
+    footer.className = 'site-footer';
     const email = '<a href="mailto:' + SA.esc(s.office_email || '') + '">' + SA.esc(s.office_email || '—') + '</a>';
     const phone = SA.esc(s.office_phone || '—');
     const hours = SA.esc(s.office_hours || '—');
@@ -125,6 +135,9 @@
       }
     } catch (e) {
       renderFooter({});
+      // Never leave the strip stuck on "Loading contact…".
+      const strip = document.getElementById('strip-contact');
+      if (strip) strip.innerHTML = '<span>Office of Student Affairs</span>';
     }
   }
 

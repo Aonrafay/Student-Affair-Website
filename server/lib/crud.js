@@ -17,6 +17,22 @@ function buildModuleCrud(def) {
   // Immutable admin-only columns that are never written from request bodies.
   const IGNORED_ON_WRITE = new Set(['id', 'created_at', 'updated_at']);
 
+  // Date/time columns (start_time, end_time, published_at, …). The admin form
+  // posts ISO 8601 strings ("2026-09-22T06:18:12.842Z"), which MySQL rejects for
+  // DATETIME/TIMESTAMP columns ("Incorrect datetime value"), so they are converted
+  // to Date objects — mysql2 serializes those using the pool's `timezone: 'Z'`.
+  const TEMPORAL_KEY = /^date$|(_at|_time|_date|_on)$/;
+
+  function normaliseTemporal(key, value) {
+    if (value === null || value === undefined || value === '') return null;
+    if (value instanceof Date) return value;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      throw new Error(`Invalid date/time for "${key}".`);
+    }
+    return date;
+  }
+
   /** Parse JSON columns on the way out. */
   function prep(row) {
     if (!row) return row;
@@ -40,7 +56,7 @@ function buildModuleCrud(def) {
         data[key] = body[key];
         continue;
       }
-      data[key] = body[key];
+      data[key] = TEMPORAL_KEY.test(key) ? normaliseTemporal(key, body[key]) : body[key];
     }
     for (const f of jsonFields) {
       if (data[f] !== undefined) data[f] = toJSON(data[f]);
@@ -54,7 +70,12 @@ function buildModuleCrud(def) {
 
   async function ensureUniqueSlug(data, ignoreId) {
     if (!def.fields.includes('slug')) return;
-    const base = data.slug && String(data.slug).trim() ? data.slug : data[def.titleField];
+    const providedSlug = data.slug && String(data.slug).trim();
+    const titleValue = data[def.titleField];
+    // On update, a body that carries neither a slug nor the title (a partial
+    // PUT) must keep the existing slug instead of being renamed to 'item'.
+    if (!providedSlug && titleValue === undefined && ignoreId != null) return;
+    const base = providedSlug || titleValue;
     data.slug = await uniqueSlug(table, base || 'item', ignoreId);
   }
 

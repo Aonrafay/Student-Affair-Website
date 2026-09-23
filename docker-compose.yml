@@ -15,8 +15,8 @@ services:
     environment:
       MYSQL_DATABASE: student_affairs
       MYSQL_USER: sa
-      MYSQL_PASSWORD: sa
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_PASSWORD: ${DB_PASSWORD:-sa}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       TZ: UTC
     volumes:
       - db_data:/var/lib/mysql
@@ -36,17 +36,19 @@ services:
     environment:
       PORT: 5000
       BASE_PATH: /student-affairs
-      JWT_SECRET: change-this-in-production-please
+      # Secrets are read from the git-ignored root `.env` (Compose reads it
+      # automatically); the fallbacks are dev-only values.
+      JWT_SECRET: ${JWT_SECRET:-change-this-in-production-please}
       DB_HOST: db
       DB_PORT: 3306
       DB_USER: sa
-      DB_PASSWORD: sa
+      DB_PASSWORD: ${DB_PASSWORD:-sa}
       DB_NAME: student_affairs
       # Seed accounts on first boot — change these before deploying.
-      ADMIN_EMAIL: admin@niit.edu.pk
-      ADMIN_PASSWORD: admin123
-      EDITOR_EMAIL: editor@niit.edu.pk
-      EDITOR_PASSWORD: editor123
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@niit.edu.pk}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      EDITOR_EMAIL: ${EDITOR_EMAIL:-editor@niit.edu.pk}
+      EDITOR_PASSWORD: ${EDITOR_PASSWORD:-editor123}
     depends_on:
       db:
         condition: service_healthy

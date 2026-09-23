@@ -4,6 +4,11 @@ const { q, qOne } = require('../config/db');
 const { parseJSON } = require('../lib/helpers');
 const modules = require('../modules');
 
+/** Only real module definitions — never the (non-enumerable) `list` helper. */
+function moduleDefs() {
+  return Object.values(modules).filter((def) => def && def.id && def.fields);
+}
+
 // --- Public -----------------------------------------------------------------
 
 /** GET /api/pages/:key — one CMS page with parsed JSON content. */
@@ -81,11 +86,17 @@ async function getAdminSettings(req, res) {
 /** PUT /api/admin/settings — accepts { key: value, … }, upserts each. */
 async function updateSettings(req, res) {
   const body = req.body || {};
-  const keys = Object.keys(body);
+  // Older admin builds posted `{ values: { … } }`; unwrap it so those clients
+  // keep working (and never store a setting literally called "values").
+  const settings = (body.values && typeof body.values === 'object' && !Array.isArray(body.values))
+    ? body.values
+    : body;
+  const keys = Object.keys(settings).filter((k) => k !== 'values');
   if (keys.length === 0) {
     return res.status(400).json({ error: 'Provide at least one setting.' });
   }
-  for (const [key, value] of Object.entries(body)) {
+  for (const [key, value] of Object.entries(settings)) {
+    if (key === 'values') continue;
     const safeKey = String(key).slice(0, 60);
     const safeValue = String(value == null ? '' : value).slice(0, 1000);
     await q(
@@ -99,18 +110,21 @@ async function updateSettings(req, res) {
 /** GET /api/admin/stats — dashboard numbers. */
 async function stats(req, res) {
   const counts = {};
-  for (const def of Object.values(modules)) {
+  for (const def of moduleDefs()) {
     counts[def.id] = (await qOne(`SELECT COUNT(*) AS c FROM \`${def.table || def.id}\``)).c;
   }
   const totalUsers = (await qOne('SELECT COUNT(*) AS c FROM users')).c;
   const totalMedia = (await qOne('SELECT COUNT(*) AS c FROM media')).c;
 
+  // Timestamps are stored UTC (see config/db.js `timezone: 'Z'`) — compare with
+  // a UTC "now" from Node, not MySQL's session-time-zone-dependent NOW().
   const nextEvent = await qOne(
     `SELECT id, slug, title, start_time, location, status
      FROM events
-     WHERE status = 'published' AND start_time >= NOW()
+     WHERE status = 'published' AND start_time >= ?
      ORDER BY start_time ASC
-     LIMIT 1`
+     LIMIT 1`,
+    [new Date()]
   );
   const recentPosts = await q(
     `SELECT id, slug, title, category, status, published_at

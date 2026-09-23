@@ -11,6 +11,11 @@ const { protect, requireRole, requireModuleRole } = require('../middleware/authM
 
 /** Express router with every CMS route. Mounted at BASE_PATH + '/api'. */
 
+/** Only real module definitions — never the (non-enumerable) `list` helper. */
+function moduleDefs() {
+  return Object.values(modules).filter((def) => def && def.id && def.fields);
+}
+
 /** Wrap an async handler so rejections reach the error middleware (Express 4). */
 const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -37,23 +42,33 @@ function buildApiRouter() {
   router.get('/pages/:key', h(contentController.getPublicPage));
 
   // --- Public: module content (published rows only) -----------------------------
-  for (const def of Object.values(modules)) {
+  for (const def of moduleDefs()) {
     const crud = buildModuleCrud(def);
     const base = `/${def.id}`;
 
     if (def.id === 'events') {
+      /** Optional `?limit=N` — used by the home page ("next 3 events"). */
+      const slice = (rows, limitParam) => {
+        const n = Number(limitParam);
+        return Number.isInteger(n) && n > 0 ? rows.slice(0, n) : rows;
+      };
+      // `config/db.js` writes/reads every timestamp as UTC (timezone: 'Z'), so
+      // comparisons must use a UTC "now" from Node — MySQL's NOW() would use the
+      // server's session time zone and shift the upcoming/past split.
+      const utcNow = () => new Date();
+
       router.get(`${base}/upcoming`, h(async (req, res) => {
-        const rows = await crud.listPublicWhere('start_time >= NOW()', [], 'start_time ASC');
-        res.json(rows);
+        const rows = await crud.listPublicWhere('start_time >= ?', [utcNow()], 'start_time ASC');
+        res.json(slice(rows, req.query.limit));
       }));
       router.get(`${base}/next`, h(async (req, res) => {
-        const row = await crud.onePublicWhere('start_time >= NOW()', [], 'start_time ASC');
+        const row = await crud.onePublicWhere('start_time >= ?', [utcNow()], 'start_time ASC');
         if (!row) return res.status(404).json({ error: 'No upcoming event found.' });
         res.json(row);
       }));
       router.get(`${base}/past`, h(async (req, res) => {
-        const rows = await crud.listPublicWhere('start_time < NOW()', [], 'start_time DESC');
-        res.json(rows);
+        const rows = await crud.listPublicWhere('start_time < ?', [utcNow()], 'start_time DESC');
+        res.json(slice(rows, req.query.limit));
       }));
     }
 
@@ -73,7 +88,7 @@ function buildApiRouter() {
   // --- Admin (everything below requires a valid session) ------------------------
   router.use('/admin', protect);
 
-  for (const def of Object.values(modules)) {
+  for (const def of moduleDefs()) {
     const crud = buildModuleCrud(def);
     const base = `/admin/${def.id}`;
 

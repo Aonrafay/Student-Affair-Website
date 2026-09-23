@@ -111,4 +111,12 @@ const modules = {
 };
 
 module.exports = modules;
-module.exports.list = Object.values(modules);
+
+// `list` exposes the definitions as an array, but it MUST stay non-enumerable:
+// the router and the dashboard counters iterate `Object.values(modules)`, and an
+// enumerable `list` makes them loop over the array itself as if it were a
+// module (producing `SELECT COUNT(*) FROM \`undefined\``).
+Object.defineProperty(module.exports, 'list', {
+  value: Object.values(modules),
+  enumerable: false
+});

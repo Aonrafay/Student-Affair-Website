@@ -83,8 +83,8 @@ for (const [route, file] of Object.entries(htmlRoutes)) {
   });
 }
 
-// Bare path (no trailing slash) → the site root.
-app.get(BASE_PATH, (req, res) => res.redirect(BASE_PATH + '/'));
+// Bare mount path: Express is not strict about trailing slashes, so the route
+// above ('/') already answers `/student-affairs` as well as `/student-affairs/`.
 
 // ============================================================================
 // 404 + error handling

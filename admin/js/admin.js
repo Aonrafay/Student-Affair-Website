@@ -452,9 +452,9 @@
           onPick(btn.getAttribute('data-name'));
         });
       });
-      bindUploadForm(body, function () {
-        root.innerHTML = '';
-      }, function (filename) {
+      // Uploading inside the picker must also *choose* the new file — the second
+      // argument is the single success handler (filename, row).
+      bindUploadForm(body, function (filename) {
         root.innerHTML = '';
         onPick(filename);
       });
@@ -551,9 +551,9 @@
   // ------------------------------------------------------------------ media --
   function uploadFormHtml(compact) {
     return '<div class="upload-box' + (compact ? ' compact' : '') + '">' +
-      '<input type="file" id="upload-input">' +
+      '<input type="file" id="upload-input" accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,application/pdf">' +
       '<button type="button" class="btn" id="upload-btn">Upload file</button>' +
-      '<span class="upload-hint">Images (jpg, png, webp, gif) or PDF, up to 10&nbsp;MB.</span>' +
+      '<span class="upload-hint">Images (jpg, png, gif, webp, svg) or PDF, up to 15&nbsp;MB.</span>' +
       '<div class="field-error" id="upload-error"></div>' +
     '</div>';
   }
@@ -647,12 +647,64 @@
       body.innerHTML = '<div class="table-wrap"><table class="list-table"><thead><tr>' +
         '<th>Page key</th><th>Title</th><th class="col-actions">Actions</th></tr></thead><tbody>' +
         rows.map(function (r) {
-          var c = r.content || {};
+          // GET /api/admin/pages returns { key, title, updated_at } — there is no
+          // `content` in this payload, so read `title` directly.
           return '<tr><td><code>' + esc(r.key) + '</code></td>' +
-            '<td>' + esc(c.title || c.hero_title || '—') + '</td>' +
+            '<td>' + esc(r.title || '—') + '</td>' +
             '<td class="col-actions"><a class="btn tiny" href="#/pages/' + encodeURIComponent(r.key) + '">Edit</a></td></tr>';
         }).join('') + '</tbody></table></div>';
     }).catch(function (err) { stateError(document.getElementById('pages-body'), err); });
+  }
+
+  // Friendly field sets for the page shapes the public site actually renders
+  // (see server/scripts/seed.js + public/js/pages.js). `path` is dotted, so
+  // "hero.title" edits content.hero.title and unknown keys are preserved.
+  var PAGE_FIELDS = {
+    'home': [
+      { path: 'hero.badge', label: 'Hero badge', type: 'text' },
+      { path: 'hero.title', label: 'Hero title', type: 'text' },
+      { path: 'hero.subtitle', label: 'Hero subtitle', type: 'textarea', rows: 3 },
+      { path: 'hero.ctaLabel', label: 'Primary button label', type: 'text' },
+      { path: 'hero.ctaLink', label: 'Primary button link (e.g. /events)', type: 'text' },
+      { path: 'hero.cta2Label', label: 'Secondary button label', type: 'text' },
+      { path: 'hero.cta2Link', label: 'Secondary button link (e.g. /contact)', type: 'text' },
+      { path: 'stats', label: 'Statistics — JSON array, e.g. [{"value":"4","label":"Programs"}]', type: 'json' },
+      { path: 'about.title', label: 'About block title', type: 'text' },
+      { path: 'about.text', label: 'About block text', type: 'textarea', rows: 5 }
+    ],
+    'about-head': [
+      { path: 'title', label: 'Title', type: 'text' },
+      { path: 'text', label: 'Intro text', type: 'textarea', rows: 4 },
+      { path: 'values', label: 'Values — JSON array, e.g. [{"title":"…","text":"…"}]', type: 'json' }
+    ],
+    'contact': [
+      { path: 'title', label: 'Title', type: 'text' },
+      { path: 'text', label: 'Intro text', type: 'textarea', rows: 4 },
+      { path: 'visit', label: 'Visit / office hours note', type: 'textarea', rows: 3 }
+    ]
+  };
+
+  /** Read a dotted path out of an object (returns undefined when absent). */
+  function getPath(obj, path) {
+    var parts = String(path).split('.');
+    var cur = obj;
+    for (var i = 0; i < parts.length; i++) {
+      if (cur == null || typeof cur !== 'object') return undefined;
+      cur = cur[parts[i]];
+    }
+    return cur;
+  }
+
+  /** Write a dotted path into an object, creating parents as needed. */
+  function setPath(obj, path, value) {
+    var parts = String(path).split('.');
+    var cur = obj;
+    for (var i = 0; i < parts.length - 1; i++) {
+      var k = parts[i];
+      if (cur[k] == null || typeof cur[k] !== 'object') cur[k] = {};
+      cur = cur[k];
+    }
+    cur[parts[parts.length - 1]] = value;
   }
 
   function pagePageEditor(key) {
@@ -662,45 +714,21 @@
     A.api('/admin/pages/' + encodeURIComponent(key)).then(function (row) {
       var content = row.content || {};
       // Known page shapes get friendly fields; anything else falls back to JSON.
-      var known = {
-        'home': [
-          { name: 'hero_title', label: 'Hero title', type: 'text' },
-          { name: 'hero_text', label: 'Hero text', type: 'textarea', rows: 3 },
-          { name: 'about_title', label: 'About block title', type: 'text' },
-          { name: 'about_text', label: 'About block text', type: 'textarea', rows: 4 }
-        ],
-        'about-head': [
-          { name: 'title', label: 'Title', type: 'text' },
-          { name: 'text', label: 'Intro text', type: 'textarea', rows: 4 },
-          { name: 'values', label: 'Values — JSON array, e.g. [{"title":"…","text":"…"}]', type: 'json', jsonMode: 'object' }
-        ],
-        'contact': [
-          { name: 'title', label: 'Title', type: 'text' },
-          { name: 'text', label: 'Intro text', type: 'textarea', rows: 4 },
-          { name: 'map_embed', label: 'Map embed URL (optional)', type: 'url' }
-        ]
-      };
-      var fields = known[key] || [{ name: '__json', label: 'Page content (JSON)', type: 'json' }];
+      var fields = PAGE_FIELDS[key] || [{ path: '__root', label: 'Page content (JSON)', type: 'json' }];
 
       var fieldsHtml = fields.map(function (f) {
-        var v;
-        if (f.name === '__json') {
-          v = content;
-        } else if (f.type === 'json') {
-          v = content[f.name] != null ? content[f.name] : [];
-        } else {
-          v = content[f.name];
-        }
+        var v = f.path === '__root' ? content : getPath(content, f.path);
         var inner;
         if (f.type === 'json') {
-          inner = '<textarea name="f-' + f.name + '" rows="10">' + esc(JSON.stringify(v == null ? {} : v, null, 2)) + '</textarea>';
+          inner = '<textarea name="f-' + f.path + '" rows="10">' +
+            esc(JSON.stringify(v == null ? (f.path === '__root' ? {} : []) : v, null, 2)) + '</textarea>';
         } else if (f.type === 'textarea') {
-          inner = '<textarea name="f-' + f.name + '" rows="' + (f.rows || 4) + '">' + esc(v == null ? '' : v) + '</textarea>';
+          inner = '<textarea name="f-' + f.path + '" rows="' + (f.rows || 4) + '">' + esc(v == null ? '' : v) + '</textarea>';
         } else {
-          inner = '<input type="' + f.type + '" name="f-' + f.name + '" value="' + esc(v == null ? '' : v) + '">';
+          inner = '<input type="' + f.type + '" name="f-' + f.path + '" value="' + esc(v == null ? '' : v) + '">';
         }
-        return '<div class="form-field"><label for="f-' + f.name + '">' + esc(f.label) + '</label>' + inner +
-          '<div class="field-error" data-error="' + f.name + '"></div></div>';
+        return '<div class="form-field"><label for="f-' + f.path + '">' + esc(f.label) + '</label>' + inner +
+          '<div class="field-error" data-error="' + f.path + '"></div></div>';
       }).join('');
 
       el.innerHTML =
@@ -715,14 +743,16 @@
           '</form>' +
         '</div>';
 
-      bindPageForm(key, fields, el);
+      bindPageForm(key, fields, el, content);
     }).catch(function (err) { stateError(el, err); });
   }
 
-  function bindPageForm(key, fields, el) {
+  function bindPageForm(key, fields, el, original) {
     document.getElementById('page-form').addEventListener('submit', function (e) {
       e.preventDefault();
-      var newContent = {};
+      // Start from a deep copy of what is stored so keys this form does not show
+      // (or that other modules read) survive the save.
+      var newContent = JSON.parse(JSON.stringify(original || {}));
       var invalid = null;
 
       el.querySelectorAll('.field-error').forEach(function (n) { n.textContent = ''; });
@@ -731,23 +761,30 @@
 
       fields.forEach(function (f) {
         if (invalid) return;
-        var node = el.querySelector('[name="f-' + f.name + '"]');
+        var node = el.querySelector('[name="f-' + f.path + '"]');
+        if (!node) return;
         if (f.type === 'json') {
-          try {
-            var parsed = JSON.parse(node.value);
-            newContent[f.name] = parsed;
-          } catch (err) {
-            invalid = f;
-            var je = el.querySelector('[data-error="' + f.name + '"]');
-            if (je) je.textContent = 'Invalid JSON: ' + err.message;
+          var text = node.value.trim();
+          var parsed = f.path === '__root' ? {} : [];
+          if (text) {
+            try {
+              parsed = JSON.parse(text);
+            } catch (err) {
+              invalid = f;
+              var je = el.querySelector('[data-error="' + f.path + '"]');
+              if (je) je.textContent = 'Invalid JSON: ' + err.message;
+              return;
+            }
+          }
+          if (f.path === '__root') {
+            newContent = parsed && typeof parsed === 'object' ? parsed : {};
+          } else {
+            setPath(newContent, f.path, parsed);
           }
         } else {
-          newContent[f.name] = node.value.trim() || null;
+          setPath(newContent, f.path, node.value.trim() || null);
         }
       });
-      if (fields.length === 1 && fields[0].name === '__json') {
-        newContent = newContent.__json || {};
-      }
 
       if (invalid) {
         errBox.textContent = 'Please fix the highlighted field.';
@@ -774,13 +811,17 @@
   }
 
   // --------------------------------------------------------------- settings --
+  // Keys must match what the public site reads: `public/js/site.js` (footer +
+  // contact strip) and `public/js/pages.js` (contact page). See the seed in
+  // server/scripts/seed.js.
   var SETTINGS_FIELDS = [
+    { name: 'office_email', label: 'Contact email', type: 'email' },
+    { name: 'office_phone', label: 'Contact phone', type: 'text' },
+    { name: 'office_location', label: 'Address', type: 'textarea', rows: 2 },
     { name: 'office_hours', label: 'Office hours', type: 'text' },
-    { name: 'email', label: 'Contact email', type: 'email' },
-    { name: 'phone', label: 'Contact phone', type: 'text' },
-    { name: 'address', label: 'Address', type: 'textarea', rows: 2 },
-    { name: 'featured_event_id', label: 'Featured event ID (blank = auto)', type: 'number' },
-    { name: 'featured_post_id', label: 'Featured post ID (blank = auto)', type: 'number' }
+    { name: 'social_facebook', label: 'Facebook URL', type: 'url' },
+    { name: 'social_instagram', label: 'Instagram URL', type: 'url' },
+    { name: 'social_twitter', label: 'X (Twitter) URL', type: 'url' }
   ];
 
   function pageSettings() {
@@ -788,7 +829,7 @@
     stateLoad(el, 'Loading settings…');
 
     A.api('/admin/settings').then(function (row) {
-      var values = (row && row.values) || row || {};
+      var values = row || {};
       var fieldsHtml = SETTINGS_FIELDS.map(function (f) {
         var v = values[f.name];
         var inner;
@@ -821,7 +862,8 @@
         var btn = document.getElementById('save-btn');
         btn.disabled = true;
         btn.textContent = 'Saving…';
-        A.api('/admin/settings', { method: 'PUT', body: { values: body } })
+        // Flat `{ key: value }` — that is what PUT /api/admin/settings expects.
+        A.api('/admin/settings', { method: 'PUT', body: body })
           .then(function () {
             toast('Settings saved.');
             btn.disabled = false;

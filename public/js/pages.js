@@ -64,10 +64,12 @@
   // ---------------------------------------------------------------- home ----
 
   function home(root) {
+    // `/events/upcoming` (not `/events`) — the default list orders by start_time
+    // DESC, which would surface past events under "Upcoming events".
     return Promise.all([
       SA.api('/pages/home').catch(function () { return { content: {} }; }),
       SA.api('/posts?limit=3'),
-      SA.api('/events?limit=3'),
+      SA.api('/events/upcoming?limit=3'),
       SA.api('/societies?limit=6'),
       SA.api('/partners?limit=20')
     ]).then(function (res) {
@@ -101,8 +103,8 @@
           '<h1>' + SA.textToHtml(hero.title || '') + '</h1>' +
           (hero.subtitle ? '<p class="sub">' + SA.esc(hero.subtitle) + '</p>' : '') +
           '<div class="btn-row">' +
-            (hero.ctaLink ? '<a class="btn" href="' + SA.BASE + (hero.ctaLink || '/events') + '">' + SA.esc(hero.ctaLabel || 'Find out more') + '</a>' : '') +
-            (hero.cta2Link ? '<a class="btn ghost" href="' + SA.BASE + (hero.cta2Link || '/societies') + '">' + SA.esc(hero.cta2Label || 'Explore') + '</a>' : '') +
+            (hero.ctaLink ? '<a class="btn" href="' + SA.esc(SA.BASE + (hero.ctaLink || '/events')) + '">' + SA.esc(hero.ctaLabel || 'Find out more') + '</a>' : '') +
+            (hero.cta2Link ? '<a class="btn ghost" href="' + SA.esc(SA.BASE + (hero.cta2Link || '/societies')) + '">' + SA.esc(hero.cta2Label || 'Explore') + '</a>' : '') +
           '</div>' +
           statHtml +
         '</div></div>' +
@@ -132,9 +134,10 @@
           '<div class="section-head"><h2>Partners</h2><a class="txt-link" href="' + SA.BASE + '/partners">All partners &rarr;</a></div>' +
           '<div class="grid-4">' + (partnerCards || '<div class="state empty">No partners yet.</div>') + '</div>' +
         '</section>';
-    });
+    }).catch(function (err) { SITE.stateError(root, err); });
   }
-// ---------------------------------------------------------------- news ----
+
+  // ---------------------------------------------------------------- news ----
   function news(root, category) {
     const active = category || 'all';
     return SA.api('/posts').then(function (posts) {
@@ -152,7 +155,7 @@
       root.querySelectorAll('.pill-btn').forEach(function (btn) {
         btn.addEventListener('click', function () { news(root, btn.dataset.cat); });
       });
-    });
+    }).catch(function (err) { SITE.stateError(root, err); });
   }
 
   // ---------------------------------------------------------- news detail --
@@ -265,7 +268,7 @@
   function societies(root) {
     SITE.stateLoad(root, 'Loading societies…');
     return SA.api('/societies').then(function (items) {
-      if (!items.length) return SITE.stateEmpty(root, 'No societies registered yet.');
+      if (!items.length) return SITE.stateEmpty(root, 'No societies are listed yet — the office is still collecting the current list. Check back soon or contact us for details.');
       root.innerHTML = '<div class="grid-3">' + items.map(societyCard).join('') + '</div>';
     }).catch(function (err) { SITE.stateError(root, err); });
   }
@@ -318,7 +321,15 @@
             return '<div class="card"><div class="card-body"><h3>' + SA.esc(v.title) + '</h3><p class="excerpt">' + SA.esc(v.text) + '</p></div></div>';
           }).join('') + '</div>';
         }
-        if (!members.length) return SITE.stateEmpty(root, 'The team page is not published yet.');
+        if (!members.length) {
+          // Seeded installs have no team yet — keep the "about the office" copy
+          // visible and explain the missing list instead of dropping everything.
+          html += '<div class="state empty"><div class="big">&#128101;</div>' +
+            '<p>The team profiles are not published yet.</p>' +
+            '<p>Please contact the office if you need to reach a specific member of staff.</p></div>';
+          root.innerHTML = html;
+          return;
+        }
         html += '<div class="grid-3">' + members.map(function (m) {
           return '<article class="card person-card">' +
             '<div class="thumb" style="height:72px;background:linear-gradient(135deg,var(--navy-soft),var(--navy))">' +
@@ -341,7 +352,7 @@
   function partners(root) {
     SITE.stateLoad(root, 'Loading partners…');
     return SA.api('/partners').then(function (items) {
-      if (!items.length) return SITE.stateEmpty(root, 'No partners listed yet.');
+      if (!items.length) return SITE.stateEmpty(root, 'No partners are listed yet. Contact the office if you would like your organisation featured here.');
       const grouped = {};
       items.forEach(function (p) {
         const cat = p.category || 'Partners';
@@ -367,7 +378,7 @@
   function documents(root) {
     SITE.stateLoad(root, 'Loading documents…');
     return SA.api('/documents').then(function (items) {
-      if (!items.length) return SITE.stateEmpty(root, 'No documents published yet.');
+      if (!items.length) return SITE.stateEmpty(root, 'No documents are published yet. Forms and policies are also available from the front desk at the Student Life Centre.');
       const grouped = {};
       items.forEach(function (d) {
         const cat = d.category || 'Documents';

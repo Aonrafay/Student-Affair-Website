@@ -24,7 +24,8 @@ Open:
 - **Site:** http://localhost:5000/student-affairs/
 - **Admin:** http://localhost:5000/student-affairs/admin/login
 
-First login (from `docker-compose.yml`, change these):
+First login (seed values — override them via `.env` / `docker-compose.yml`, and change them before
+exposing the app to anyone):
 
 - Admin — `admin@niit.edu.pk` / `admin123`
 - Editor — `editor@niit.edu.pk` / `editor123`
@@ -50,6 +51,83 @@ Then open the same URLs as above.
 curl http://localhost:5000/student-affairs/api/health
 # → {"ok":true,"db":true}
 ```
+
+## Deploying to a VM (testing)
+
+The stack is two containers (Node app + MySQL 8) defined in `docker-compose.yml`, so any VM with
+Docker can host it. **2 vCPU / 2 GB RAM / 20 GB disk** is plenty.
+
+### Best OS
+
+**Ubuntu Server 24.04 LTS** — free security updates until 2029, best-documented Docker install,
+runs comfortably on the specs above. Alternatives: Debian 12 (lighter) or Rocky/Alma Linux 9 (if
+RHEL-style is required). Skip desktop editions — SSH is all you need.
+
+Give the VM a static IP (or DHCP reservation) so testers always reach the same address, e.g.
+`http://192.168.1.50:5000`.
+
+### Setup on the VM (Ubuntu)
+
+```bash
+# 1. Base packages + Docker Engine
+sudo apt update && sudo apt -y upgrade
+sudo apt -y install git curl ufw
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER && newgrp docker   # run docker without sudo
+
+# 2. Get the code
+git clone https://github.com/maisum77/Student-Affair-Website.git
+cd Student-Affair-Website
+
+# 3. Secrets — this file is git-ignored, never commit it.
+#    docker-compose.yml reads JWT_SECRET, DB_PASSWORD, ADMIN_PASSWORD and
+#    EDITOR_PASSWORD from here (dev fallbacks apply if absent).
+cp .env.example .env
+openssl rand -hex 32          # copy the output…
+nano .env                     # …into JWT_SECRET; change DB_PASSWORD,
+                              # ADMIN_PASSWORD and EDITOR_PASSWORD too
+
+# 4. Firewall: allow SSH + app port
+sudo ufw allow OpenSSH && sudo ufw allow 5000/tcp && sudo ufw enable
+
+# 5. Build & run (migrates + seeds automatically on first boot)
+docker compose up -d --build
+docker compose ps             # both services should be running/healthy
+docker compose logs -f app    # watch first-boot migrate/seed
+
+# 6. Verify
+curl http://localhost:5000/student-affairs/api/health
+# → {"ok":true,"db":true}
+```
+
+Then from any machine on the LAN:
+
+- **Site:** `http://<VM_IP>:5000/student-affairs/`
+- **Admin:** `http://<VM_IP>:5000/student-affairs/admin/login` (credentials from the VM's `.env`)
+
+### Operating on the VM
+
+- **Auto-start on boot** — `restart: unless-stopped` in `docker-compose.yml` brings the stack back
+  after a VM reboot (Docker starts by default).
+- **Update after code changes** — `git pull && docker compose up -d --build`. MySQL data and
+  uploaded media live in the named volumes `db_data` / `uploads_data`, so rebuilds don't lose them.
+- **Backups** —
+  ```bash
+  docker compose exec db sh -c 'exec mysqldump -usa -p"sa" student_affairs' > backup.sql
+  docker run --rm -v student-affair-website_uploads_data:/data -v "$PWD":/bkp alpine \
+      tar czf /bkp/uploads.tgz -C /data .
+  ```
+  (Use the real `DB_PASSWORD` from `.env` in the `mysqldump` command.)
+- **Port 80 instead of 5000** (optional) — change the compose port mapping to `"80:5000"`, or put
+  nginx on the VM using the proxy block below. When university IT mounts the app under the real
+  domain nothing else changes — `BASE_PATH=/student-affairs` already matches.
+- **Fresh testing start** (⚠️ deletes DB data) — `docker compose down -v`.
+
+> **Security:** change every secret in `.env` on the VM before exposing the app — especially
+> `ADMIN_PASSWORD`, since the dev defaults are public in git history.
+
+---
+
 
 ---
 
