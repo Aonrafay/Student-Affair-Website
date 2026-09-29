@@ -8,6 +8,7 @@ const contentController = require('../controllers/contentController');
 const mediaController = require('../controllers/mediaController');
 const usersController = require('../controllers/usersController');
 const { protect, requireRole, requireModuleRole } = require('../middleware/authMiddleware');
+const societyYearsController = require('../controllers/societyYearsController');
 
 /** Express router with every CMS route. Mounted at BASE_PATH + '/api'. */
 
@@ -40,6 +41,22 @@ function buildApiRouter() {
   // --- Public: site copy + settings ---------------------------------------------
   router.get('/settings', h(contentController.getPublicSettings));
   router.get('/pages/:key', h(contentController.getPublicPage));
+
+  // --- Public: societies detail (carries its published year pages) --------------
+  // Registered BEFORE the generic module loop — Express matches this route
+  // first, so GET /api/societies/:slug returns the society plus `years`, each
+  // year page with its Markdown body and officers/committee members.
+  const societiesCrud = buildModuleCrud(modules.societies);
+  router.get('/societies/:slug', h(async (req, res) => {
+    const row = await societiesCrud.getPublic(req.params.slug);
+    if (!row) return res.status(404).json({ error: 'Not found.' });
+    // People moved to society_members (attached to year pages) — drop the
+    // legacy embedded JSON columns from the public payload.
+    delete row.officers;
+    delete row.team;
+    row.years = await societyYearsController.publicYears(row.id);
+    res.json(row);
+  }));
 
   // --- Public: module content (published rows only) -----------------------------
   for (const def of moduleDefs()) {
@@ -88,23 +105,51 @@ function buildApiRouter() {
   // --- Admin (everything below requires a valid session) ------------------------
   router.use('/admin', protect);
 
+  // --- Society year pages + members (nested under societies) ---------------------
+  // Registered BEFORE the generic module loop, so these routes win over the
+  // generic /admin/societies/:id ones. Roles follow the societies module
+  // (admin + editor). Deleting a society cascades to its years + members.
+  const socGuard = requireModuleRole(modules.societies);
+  router.get('/admin/societies/:societyId(\\d+)/years', socGuard, h(societyYearsController.listYears));
+  router.post('/admin/societies/:societyId(\\d+)/years', socGuard, h(societyYearsController.createYear));
+  router.get('/admin/societies/:societyId(\\d+)/years/:yearId(\\d+)', socGuard, h(societyYearsController.getYear));
+  router.put('/admin/societies/:societyId(\\d+)/years/:yearId(\\d+)', socGuard, h(societyYearsController.updateYear));
+  router.post('/admin/societies/:societyId(\\d+)/years/:yearId(\\d+)/publish', socGuard, h(societyYearsController.publishYear));
+  router.delete('/admin/societies/:societyId(\\d+)/years/:yearId(\\d+)', socGuard, h(societyYearsController.deleteYear));
+  router.post('/admin/societies/:societyId(\\d+)/years/:yearId(\\d+)/members', socGuard, h(societyYearsController.createMember));
+  router.put('/admin/societies/:societyId(\\d+)/years/:yearId(\\d+)/members/:memberId(\\d+)', socGuard, h(societyYearsController.updateMember));
+  router.delete('/admin/societies/:societyId(\\d+)/years/:yearId(\\d+)/members/:memberId(\\d+)', socGuard, h(societyYearsController.deleteMember));
+  // Cascade delete — replaces the generic societies DELETE (this one wins).
+  router.delete('/admin/societies/:id(\\d+)', socGuard, h(async (req, res) => {
+    await societyYearsController.deleteSocietyCascade(Number(req.params.id));
+    res.json({ ok: true });
+  }));
+
   for (const def of moduleDefs()) {
     const crud = buildModuleCrud(def);
     const base = `/admin/${def.id}`;
+    // The legacy `officers`/`team` JSON columns on `societies` were replaced by
+    // society_members (attached to year pages). They stay in the table for
+    // rollback safety but are no longer part of the API surface.
+    const stripLegacy = (row) => {
+      if (def.id !== 'societies' || !row) return row;
+      const { officers, team, ...rest } = row;
+      return rest;
+    };
 
     router.get(base, requireModuleRole(def), h(async (req, res) => {
-      res.json(await crud.list({ q: req.query.q }));
+      res.json((await crud.list({ q: req.query.q })).map(stripLegacy));
     }));
 
     router.get(`${base}/:id(\\d+)`, requireModuleRole(def), h(async (req, res) => {
       const row = await crud.get(Number(req.params.id));
       if (!row) return res.status(404).json({ error: 'Not found.' });
-      res.json(row);
+      res.json(stripLegacy(row));
     }));
 
     router.post(base, requireModuleRole(def), h(async (req, res) => {
       try {
-        res.status(201).json(await crud.create(req.body || {}));
+        res.status(201).json(stripLegacy(await crud.create(req.body || {})));
       } catch (e) {
         res.status(400).json({ error: e.message });
       }
@@ -115,7 +160,7 @@ function buildApiRouter() {
         const status = (req.body && req.body.status) || 'published';
         const row = await crud.setStatus(Number(req.params.id), status);
         if (!row) return res.status(404).json({ error: 'Not found.' });
-        res.json(row);
+        res.json(stripLegacy(row));
       } catch (e) {
         res.status(400).json({ error: e.message });
       }
@@ -125,7 +170,7 @@ function buildApiRouter() {
       try {
         const row = await crud.update(Number(req.params.id), req.body || {});
         if (!row) return res.status(404).json({ error: 'Not found.' });
-        res.json(row);
+        res.json(stripLegacy(row));
       } catch (e) {
         res.status(400).json({ error: e.message });
       }

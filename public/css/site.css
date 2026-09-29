@@ -132,13 +132,79 @@ a:hover { color: var(--gold-dark); }
 .list .row h3 { margin: 0 0 4px; font-size: 17px; }
 .list .row p { margin: 0; color: #4a5262; font-size: 14px; }
 
-.person-card .avatar { width: 74px; height: 74px; border-radius: 50%; margin-top: -37px; margin-left: 20px; border: 3px solid #fff; background: linear-gradient(135deg, var(--navy-soft), var(--navy)); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 800; overflow: hidden; }
+.person-card .avatar { width: 92px; height: 92px; border-radius: 50%; margin-top: -46px; margin-left: 20px; border: 3px solid #fff; background: linear-gradient(135deg, var(--navy-soft), var(--navy)); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 800; overflow: hidden; }
 .person-card .avatar img { width: 100%; height: 100%; object-fit: cover; }
 .person-card .card-body .role { color: var(--gold-dark); font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .4px; }
+/* Standard office card — slightly larger photo than the old 170px thumb. */
+.person-card .person-card-photo { height: 196px; }
+.person-card .person-card-photo .ph-text { font-size: 15px; }
+
+/* Featured office staff (admin: "Featured on the office page") — the photo and
+   bio carry the page, so the card is a wide, image-led layout. */
+.office-featured {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 20px; margin: 0 0 26px;
+}
+.person-card-lead {
+  display: grid; grid-template-columns: 210px 1fr; gap: 0; overflow: hidden;
+  border-left: 4px solid var(--navy);
+}
+.person-card-lead .person-lead-photo {
+  background: linear-gradient(135deg, var(--navy-soft), var(--navy));
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 54px; font-weight: 800; min-height: 100%;
+}
+.person-card-lead .person-lead-photo img { width: 100%; height: 100%; object-fit: cover; }
+.person-card-lead .card-body { padding: 22px 24px; display: flex; flex-direction: column; justify-content: center; }
+.person-card-lead .card-body h3 { font-size: 22px; margin: 0 0 8px; color: var(--navy); }
+.person-card-lead .person-role-badge { align-self: flex-start; margin-bottom: 0; }
+.person-card-lead .person-bio { font-size: 15.5px; }
+.person-card-lead .person-email { margin-top: 4px; }
+@media (max-width: 720px) {
+  .person-card-lead { grid-template-columns: 1fr; }
+  .person-card-lead .person-lead-photo { min-height: 190px; }
+}
 
 .partner-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 26px 16px; }
 .partner-tile .logo { font-size: 34px; }
 .partner-tile b { color: var(--navy); }
+
+/* Partners grid — grouped by collaboration type, most important partner first.
+   The lead partner of each group spans two columns as a spotlight card. */
+.partner-section { margin-bottom: 34px; }
+.partner-section h2 { color: var(--navy); margin-bottom: 12px; }
+.partner-grid { align-items: stretch; }
+.partner-grid > .card-link { display: flex; }
+.partner-grid > .card-link > .card { width: 100%; }
+.partner-spotlight {
+  grid-column: span 2;
+  border-color: var(--navy); border-left-width: 4px;
+  background: linear-gradient(120deg, #f7faff, #fff);
+  gap: 10px; padding: 30px 22px;
+}
+.partner-spotlight .logo { font-size: 46px; }
+.partner-spotlight b { font-size: 18px; }
+.spotlight-link { color: var(--navy-soft); font-size: 13px; font-weight: 600; }
+.partner-grid .partner-tile:not(.partner-spotlight) { min-height: 118px; }
+
+/* Partner detail page. */
+.partner-detail-head { display: flex; align-items: center; gap: 20px; margin: 14px 0 4px; }
+.partner-detail-logo {
+  width: 104px; height: 104px; border-radius: 16px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #dbeafe, #93c5fd); font-size: 40px;
+  box-shadow: var(--shadow);
+}
+.partner-cat-badge {
+  display: inline-block; padding: 4px 11px; background: var(--navy); color: #fff;
+  border-radius: 999px; font-size: 11.5px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase;
+}
+@media (max-width: 720px) {
+  .partner-spotlight { grid-column: span 1; }
+  .partner-detail-head { flex-direction: column; text-align: center; }
+  .partner-cat-badge { align-self: center; }
+}
 .doc-row { display: flex; gap: 14px; align-items: flex-start; padding: 16px 0; border-bottom: 1px solid var(--line); }
 .doc-row .icon { font-size: 26px; flex: none; }
 .doc-row h3 { margin: 0 0 4px; font-size: 16px; }
@@ -210,3 +276,115 @@ a:hover { color: var(--gold-dark); }
   .brand-mark { width: 38px; height: 38px; font-size: 14px; }
 }
 @media (max-width: 640px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
+/* --------------- rendered Markdown (.md-body) + society year pages ---------- */
+/* .md-body styles any Markdown body: news articles, event descriptions,
+   notices and society year pages. */
+.year-tabs {
+  display: flex; flex-wrap: wrap; gap: 8px; margin: 28px 0 18px;
+}
+.year-tab {
+  border: 1px solid var(--line); background: #fff; color: var(--navy);
+  font: 600 13.5px/1 var(--font); padding: 10px 16px; border-radius: 999px;
+  cursor: pointer; box-shadow: var(--shadow); transition: background .15s, color .15s;
+}
+.year-tab:hover { background: #eff4ff; }
+.year-tab.active { background: var(--navy); border-color: var(--navy); color: #fff; }
+
+.year-title { margin-top: 4px; }
+
+/* Rendered Markdown bodies. */
+.md-body { color: var(--ink); }
+.md-body h1, .md-body h2, .md-body h3 { color: var(--navy); margin: 20px 0 8px; line-height: 1.3; }
+.md-body h1 { font-size: 24px; }
+.md-body h2 { font-size: 20px; }
+.md-body h3 { font-size: 16.5px; }
+.md-body p { margin: 10px 0; }
+.md-body ul, .md-body ol { margin: 10px 0; padding-left: 24px; }
+.md-body li { margin: 4px 0; }
+.md-body img {
+  border-radius: 10px; border: 1px solid var(--line);
+  margin: 14px auto; box-shadow: var(--shadow);
+}
+.md-body blockquote {
+  margin: 14px 0; padding: 10px 18px; border-left: 3px solid var(--gold);
+  background: #f2f6fd; border-radius: 0 10px 10px 0; color: var(--muted);
+}
+.md-body code {
+  background: #eef2f7; border: 1px solid var(--line); border-radius: 5px;
+  padding: 1px 6px; font-size: .92em;
+}
+.md-body pre {
+  background: #f2f5f9; border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 14px; overflow: auto; margin: 12px 0;
+}
+.md-body pre code { border: none; background: none; padding: 0; }
+.md-body a { word-break: break-word; }
+.md-body hr { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
+
+/* People of one society year — sized by designation:
+   hero (lead officer) › medium cards (officers) › compact rows (committee). */
+.people-panel { margin-top: 26px; }
+.people-panel h2 { margin-bottom: 10px; }
+.people-panel h2.people-sub { margin-top: 22px; }
+.people-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.people-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 16px; }
+
+.person-avatar {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  overflow: hidden; font-weight: 700; color: var(--navy);
+  background: linear-gradient(135deg, #dbeafe, #93c5fd);
+}
+.person-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.person-avatar.sm { width: 52px; height: 52px; border-radius: 50%; font-size: 15px; }
+.person-avatar.md { width: 88px; height: 88px; border-radius: 50%; font-size: 24px; box-shadow: var(--shadow); }
+
+/* Lead officer — the first one in sort order. */
+.person-hero {
+  display: flex; align-items: center; gap: 22px;
+  border: 1px solid var(--line); border-left: 4px solid var(--navy);
+  border-radius: 14px; padding: 20px 22px; background: linear-gradient(120deg, #f7faff, #fff);
+  box-shadow: var(--shadow);
+}
+.person-avatar.lg {
+  width: 132px; height: 132px; border-radius: 18px; font-size: 38px;
+  border: 3px solid #fff; box-shadow: 0 0 0 1px var(--line), var(--shadow);
+}
+.person-hero-info { min-width: 0; }
+.person-hero-info h3 { font-size: 22px; margin: 0 0 6px; color: var(--navy); }
+.person-role-badge {
+  display: inline-block; margin-bottom: 8px; padding: 4px 11px;
+  background: var(--navy); color: #fff; border-radius: 999px;
+  font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+}
+
+/* Other officers. */
+.person-card-sm {
+  display: flex; align-items: flex-start; gap: 14px;
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px; background: #fff; box-shadow: var(--shadow);
+}
+.person-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.person-info b { font-size: 15.5px; color: var(--ink); }
+.person-info .person-role { font-size: 12.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--gold-dark); }
+.person-info span { font-size: 13px; color: var(--muted); }
+.person-info a { font-size: 12.5px; overflow-wrap: anywhere; }
+
+/* The member's own words — set larger so the person, not just the post, reads. */
+.person-bio { margin: 6px 0 4px; font-size: 14.5px; line-height: 1.6; color: var(--ink); }
+.person-hero .person-bio { font-size: 16px; }
+.person-email { font-size: 13.5px; font-weight: 600; }
+
+/* Committee — compact, clearly secondary. */
+.person-row {
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; background: #fff;
+}
+.person-row .person-info b { font-size: 15px; }
+.person-row .person-info span { font-size: 12.5px; }
+
+@media (max-width: 720px) {
+  .person-hero { flex-direction: column; text-align: center; gap: 14px; }
+  .person-avatar.lg { width: 116px; height: 116px; font-size: 34px; }
+  .person-hero-info h3 { font-size: 20px; }
+}

@@ -1,8 +1,11 @@
 /* ==========================================================================
    Student Affairs CMS — admin SPA
    Hash-routed: #/dashboard  #/m/<module>[/{new|id}]  #/media  #/pages
-                #/pages/<key>  #/settings  #/users
-   Depends on: auth.js (window.AdminAuth), modules.js (window.ADMIN_MODULES)
+                 #/pages/<key>  #/settings  #/users
+                 #/m/societies/<sid>/years[/{new|<yid>}]   (year pages +
+                 their people — Markdown story per society per year)
+   Depends on: auth.js (window.AdminAuth), modules.js (window.ADMIN_MODULES),
+               admin/js/vendor/marked.min.js (window.marked — optional)
    ========================================================================== */
 (function () {
   'use strict';
@@ -46,6 +49,12 @@
   function canAccess(item) {
     var roles = item.roles || ['admin'];
     return roles.indexOf(user.role) !== -1;
+  }
+
+  /** First letter uppercase (toasts read better: "Society saved"). */
+  function upperFirst(text) {
+    var s = String(text || '');
+    return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
   function moduleById(id) {
@@ -150,7 +159,15 @@
       var mod = moduleById(parts[1]);
       if (!mod || !canAccess(mod)) return noAccess();
       if (parts[2] === 'new') return pageForm(mod, null);
-      if (parts[2] && Number(parts[2])) return pageForm(mod, Number(parts[2]));
+      if (parts[2] && Number(parts[2])) {
+        if (mod.child && parts[3] === mod.child.route) {
+          // Society drill-down: #/m/societies/<sid>/years[/{new|<yid>}]
+          if (parts[4] === 'new') return pageYearEditor(mod, Number(parts[2]), null);
+          if (parts[4] && Number(parts[4])) return pageYearEditor(mod, Number(parts[2]), Number(parts[4]));
+          return pageSocietyYears(mod, Number(parts[2]));
+        }
+        return pageForm(mod, Number(parts[2]));
+      }
       return pageList(mod);
     }
     if (head === 'media') return canAccess({ roles: ['admin', 'editor'] }) ? pageMedia() : noAccess();
@@ -232,6 +249,9 @@
           var isPublished = row.status === 'published';
           return '<tr data-id="' + row.id + '" data-title="' + esc(rowTitle(mod, row)) + '">' + cells +
             '<td class="col-actions">' +
+              (mod.child
+                ? '<a class="btn tiny" href="#/m/' + mod.id + '/' + row.id + '/' + mod.child.route + '">' + esc(mod.child.label) + '</a>'
+                : '') +
               '<a class="btn tiny" href="#/m/' + mod.id + '/' + row.id + '">Edit</a>' +
               '<button class="btn tiny ghost" data-act="toggle" data-status="' + (isPublished ? 'draft' : 'published') + '">' +
                 (isPublished ? 'Unpublish' : 'Publish') + '</button>' +
@@ -338,6 +358,12 @@
     if (f.type === 'json') {
       return '<textarea ' + name + ' rows="' + (f.jsonMode === 'object' ? 6 : 4) + '" data-json="' + esc(f.jsonMode || 'object') + '"' + req + '>' + esc(v) + '</textarea>';
     }
+    if (f.type === 'markdown') {
+      // Same widget the society year pages use: toolbar, live preview and an
+      // image button that inserts a media-library file at the cursor. The
+      // textarea keeps the standard f-<name> so collectForm() just works.
+      return mdEditorHtml(name, v, f.rows || 14);
+    }
     return '<input type="' + f.type + '" ' + name + ' value="' + esc(v) + '"' + req +
       (f.type === 'slug' ? ' placeholder="auto-generated"' : '') + '>';
   }
@@ -364,6 +390,9 @@
         '<div class="page-head"><h1>' + (id ? 'Edit ' : 'New ') + esc(mod.singular) + '</h1>' +
           '<div class="head-actions">' +
             (row.status ? statusBadge(row.status) : '') +
+            (id && mod.child
+              ? '<a class="btn" href="#/m/' + mod.id + '/' + id + '/' + mod.child.route + '">' + esc(mod.child.label) + ' &rarr;</a>'
+              : '') +
             '<a class="btn ghost" href="#/m/' + mod.id + '">&larr; Back to list</a>' +
           '</div></div>' +
         '<div class="panel">' +
@@ -376,44 +405,58 @@
           '</form>' +
         '</div>';
 
-      bindMediaFields(mod);
+      bindMediaFields(mod.fields);
+      // Wire any Markdown editors in this form (posts body, event description,
+      // notice body, …) — toolbar, live preview and media-picker image insert.
+      el.querySelectorAll('.md-editor').forEach(bindMdEditor);
       bindForm(mod, id);
     }).catch(function (err) { stateError(el, err); });
   }
 
+  /** Wire ONE "Choose from media" picker wrapper (see mediaFieldHtml). */
+  function bindOneMediaField(wrap, accept) {
+    if (!wrap) return;
+    var input = wrap.querySelector('input[type="text"]');
+    var preview = wrap.querySelector('.media-preview');
+
+    function refresh() {
+      preview.innerHTML = mediaPreviewHtml(input.value, accept);
+    }
+
+    wrap.querySelector('[data-choose]').addEventListener('click', function () {
+      openMediaPicker(accept, function (filename) {
+        input.value = filename;
+        refresh();
+      });
+    });
+    wrap.querySelector('[data-clear]').addEventListener('click', function () {
+      input.value = '';
+      refresh();
+    });
+    refresh();
+  }
+
   /** Wire the "Choose from media" pickers inside a form. */
-  function bindMediaFields(mod) {
+  function bindMediaFields(fields) {
     view().querySelectorAll('.media-field').forEach(function (wrap) {
-      var input = wrap.querySelector('input[type="text"]');
-      var preview = wrap.querySelector('.media-preview');
       var fieldName = wrap.getAttribute('data-field');
       var accept = '';
-      for (var i = 0; i < mod.fields.length; i++) {
-        if (mod.fields[i].name === fieldName && mod.fields[i].type === 'media') {
-          accept = mod.fields[i].accept || '';
+      for (var i = 0; i < fields.length; i++) {
+        if (fields[i].name === fieldName && fields[i].type === 'media') {
+          accept = fields[i].accept || '';
           break;
         }
       }
-
-      function refresh() {
-        preview.innerHTML = mediaPreviewHtml(input.value, accept);
-      }
-
-      wrap.querySelector('[data-choose]').addEventListener('click', function () {
-        openMediaPicker(accept, function (filename) {
-          input.value = filename;
-          refresh();
-        });
-      });
-      wrap.querySelector('[data-clear]').addEventListener('click', function () {
-        input.value = '';
-        refresh();
-      });
-      refresh();
+      bindOneMediaField(wrap, accept);
     });
   }
 
-  /** Media picker modal → resolves with the chosen filename via onPick. */
+  /** Human label for a picked file: original name without its extension. */
+  function mediaAlt(name) {
+    return String(name || '').replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').trim();
+  }
+
+  /** Media picker modal → onPick(filename, altText) with the chosen file. */
   function openMediaPicker(accept, onPick) {
     var root = document.getElementById('modal-root');
     root.innerHTML =
@@ -435,7 +478,7 @@
         body.innerHTML = '<div class="state empty"><p>No matching media yet — upload one below.</p></div>' + uploadFormHtml(true);
       } else {
         body.innerHTML = '<div class="media-grid">' + filtered.map(function (m) {
-          return '<button type="button" class="media-item" data-name="' + esc(m.filename) + '">' +
+          return '<button type="button" class="media-item" data-name="' + esc(m.filename) + '" data-alt="' + esc(mediaAlt(m.original_name || m.filename)) + '">' +
             '<span class="media-thumb">' +
               (String(m.mime || '').indexOf('image/') === 0
                 ? '<img src="' + esc(A.mediaUrl(m.filename)) + '" alt="">'
@@ -449,18 +492,501 @@
       body.querySelectorAll('.media-item').forEach(function (btn) {
         btn.addEventListener('click', function () {
           root.innerHTML = '';
-          onPick(btn.getAttribute('data-name'));
+          onPick(btn.getAttribute('data-name'), btn.getAttribute('data-alt') || '');
         });
       });
       // Uploading inside the picker must also *choose* the new file — the second
       // argument is the single success handler (filename, row).
-      bindUploadForm(body, function (filename) {
+      bindUploadForm(body, function (filename, row) {
         root.innerHTML = '';
-        onPick(filename);
+        onPick(filename, mediaAlt((row && row.original_name) || filename));
       });
     }).catch(function (err) {
       document.getElementById('picker-body').innerHTML = '<div class="state error"><p>' + esc(err.message) + '</p></div>';
     });
+  }
+
+  // --------------------------------------------- societies: year pages ----
+  // #/m/societies/<sid>/years[/{new|<yid>}] — one Markdown page per society
+  // per year, each carrying that year's officers + committee members.
+
+  /** First letters of up to two words (avatar placeholder). */
+  function initialsOf(text) {
+    return String(text || '?').trim().split(/\s+/).slice(0, 2).map(function (w) {
+      return w.charAt(0).toUpperCase();
+    }).join('') || '?';
+  }
+
+  /** A "Choose from media" field (same markup the generic form renders). */
+  function mediaFieldHtml(fieldName, value, accept) {
+    return '<div class="media-field" data-field="' + fieldName + '">' +
+      '<div class="media-field-row">' +
+        '<input type="text" name="f-' + fieldName + '" value="' + esc(value || '') + '" placeholder="no file chosen" readonly>' +
+        '<button type="button" class="btn tiny" data-choose>Choose from media</button>' +
+        '<button type="button" class="btn tiny ghost" data-clear>Clear</button>' +
+      '</div>' +
+      '<div class="media-preview">' + mediaPreviewHtml(value || '', accept) + '</div>' +
+    '</div>';
+  }
+
+  /** Markdown → HTML (vendored marked) with media-library filenames → URLs. */
+  function mdRender(text) {
+    var src = String(text == null ? '' : text);
+    if (!src.trim()) return '';
+    if (!window.marked) {
+      // Library missing — degrade to escaped text (never fails the page).
+      return '<p>' + esc(src).replace(/\n/g, '<br>') + '</p>';
+    }
+    // ![alt](filename) resolves to the uploads URL at render time, so stored
+    // Markdown keeps referencing the bare media-library filename. Absolute
+    // and external URLs pass through untouched.
+    src = src.replace(/(!\[[^\]]*\]\()([^)\s]+)([^)]*\))/g, function (m, pre, imgSrc, post) {
+      if (/^(https?:|\/|data:)/i.test(imgSrc)) return m;
+      return pre + (A.mediaUrl(imgSrc) || imgSrc) + post;
+    });
+    return window.marked.parse(src, { breaks: true, gfm: true });
+  }
+
+  /** The Markdown editor widget: toolbar + textarea + collapsible preview.
+   *  `nameAttr` is a full attribute string, e.g. 'name="f-body"'. */
+  function mdEditorHtml(nameAttr, value, rows, placeholder) {
+    return '<div class="md-editor">' +
+      '<div class="md-toolbar">' +
+        '<button type="button" class="btn tiny" data-md-cmd="bold" title="Bold"><b>B</b></button>' +
+        '<button type="button" class="btn tiny" data-md-cmd="italic" title="Italic"><i>I</i></button>' +
+        '<button type="button" class="btn tiny" data-md-cmd="h2" title="Heading (##)">Heading</button>' +
+        '<button type="button" class="btn tiny" data-md-cmd="list" title="Bullet list">&bull; List</button>' +
+        '<button type="button" class="btn tiny" data-md-cmd="link" title="Link">Link</button>' +
+        '<button type="button" class="btn tiny" data-md-cmd="image" title="Insert image from the media library">&#128247; Image</button>' +
+        '<button type="button" class="btn tiny ghost md-toggle" title="Live preview">Preview</button>' +
+      '</div>' +
+      '<div class="md-panes">' +
+        '<textarea class="md-input" ' + nameAttr + ' rows="' + (rows || 14) + '" placeholder="' +
+          esc(placeholder || 'Write in Markdown…') + '">' + esc(value == null ? '' : value) + '</textarea>' +
+        '<div class="md-preview" hidden></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  /** Insert text at the textarea cursor (replacing any selection). */
+  function insertAtCursor(ta, text) {
+    var start = ta.selectionStart;
+    var end = ta.selectionEnd;
+    ta.value = ta.value.slice(0, start) + text + ta.value.slice(end);
+    ta.focus();
+    ta.setSelectionRange(start + text.length, start + text.length);
+  }
+
+  /** Apply a toolbar command to the textarea, selection-aware. */
+  function applyMdCmd(ta, cmd) {
+    var start = ta.selectionStart;
+    var end = ta.selectionEnd;
+    var value = ta.value;
+    var sel = value.slice(start, end);
+    var before = value.slice(0, start);
+    var after = value.slice(end);
+    var out = null;
+    var selStart = start;
+    var selEnd = start;
+
+    if (cmd === 'bold' || cmd === 'italic') {
+      var wrap = cmd === 'bold' ? '**' : '*';
+      out = before + wrap + (sel || 'text') + wrap + after;
+      selStart = start + wrap.length;
+      selEnd = selStart + (sel || 'text').length;
+    } else if (cmd === 'h2') {
+      // Toggle a "## " prefix on the line the caret is on.
+      var lineStart = before.lastIndexOf('\n') + 1;
+      if (value.slice(lineStart, lineStart + 3) === '## ') {
+        out = value.slice(0, lineStart) + value.slice(lineStart + 3);
+        selStart = selEnd = Math.max(lineStart, start - 3);
+      } else {
+        out = value.slice(0, lineStart) + '## ' + value.slice(lineStart);
+        selStart = selEnd = start + 3;
+      }
+    } else if (cmd === 'list') {
+      // Prefix every non-empty line in the touched block with "- ".
+      var blockStart = before.lastIndexOf('\n') + 1;
+      var nl = value.indexOf('\n', end);
+      var blockEnd = nl === -1 ? value.length : nl;
+      var newBlock = value.slice(blockStart, blockEnd).split('\n').map(function (line) {
+        if (!line.trim() || /^- /.test(line)) return line;
+        return '- ' + line;
+      }).join('\n');
+      out = value.slice(0, blockStart) + newBlock + value.slice(blockEnd);
+      selStart = blockStart;
+      selEnd = blockStart + newBlock.length;
+    } else if (cmd === 'link') {
+      var text = sel || 'link text';
+      out = before + '[' + text + '](https://)' + after;
+      selStart = start + text.length + 3; // start of the URL
+      selEnd = selStart + 8;
+    }
+
+    if (out === null) return;
+    ta.value = out;
+    ta.focus();
+    ta.setSelectionRange(selStart, selEnd);
+  }
+
+  /** Wire the editor widget: toolbar commands, image insert, live preview. */
+  function bindMdEditor(editor) {
+    var ta = editor.querySelector('.md-input');
+    var preview = editor.querySelector('.md-preview');
+    var toggleBtn = editor.querySelector('.md-toggle');
+    var previewTimer = null;
+
+    function renderPreview() {
+      preview.innerHTML = mdRender(ta.value);
+    }
+
+    function refresh() {
+      if (preview.hidden) return;
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(renderPreview, 150);
+    }
+
+    toggleBtn.addEventListener('click', function () {
+      preview.hidden = !preview.hidden;
+      if (!preview.hidden) renderPreview();
+    });
+
+    ta.addEventListener('input', refresh);
+
+    editor.querySelectorAll('[data-md-cmd]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.getAttribute('data-md-cmd') === 'image') {
+          openMediaPicker('image', function (filename, alt) {
+            insertAtCursor(ta, '![' + (alt || mediaAlt(filename)) + '](' + filename + ')');
+            refresh();
+          });
+          return;
+        }
+        applyMdCmd(ta, btn.getAttribute('data-md-cmd'));
+        refresh();
+      });
+    });
+  }
+
+  /** #/m/societies/<sid>/years — one society's year pages. */
+  function pageSocietyYears(mod, societyId) {
+    var el = view();
+    stateLoad(el, 'Loading year pages…');
+
+    A.api('/admin/societies/' + societyId).then(function (society) {
+      var base = '#/m/societies/' + societyId + '/years';
+      var apiBase = '/admin/societies/' + societyId + '/years';
+
+      el.innerHTML =
+        '<div class="page-head"><h1>' + mod.icon + ' ' + esc(society.name) + ' — year pages</h1>' +
+          '<div class="head-actions">' +
+            '<a class="btn ghost" href="#/m/societies">&larr; All societies</a>' +
+            '<a class="btn ghost" href="#/m/societies/' + societyId + '">Edit society</a>' +
+            '<a class="btn" href="' + base + '/new">+ Add year page</a>' +
+          '</div></div>' +
+        '<p class="muted-note">Each year (e.g. 2025-26) gets its own page: a Markdown story plus that year&#39;s officers and committee.</p>' +
+        '<div id="years-body"><div class="state"><div class="spinner"></div><p>Loading…</p></div></div>';
+
+      var body = document.getElementById('years-body');
+
+      function load() {
+        body.innerHTML = '<div class="state"><div class="spinner"></div><p>Loading…</p></div>';
+        A.api(apiBase).then(function (rows) {
+          if (!rows.length) {
+            return stateEmpty(body, 'No year pages yet for this society.',
+              '<p><a class="btn" href="' + base + '/new">Create the first year page</a></p>');
+          }
+          body.innerHTML = '<div class="table-wrap"><table class="list-table"><thead><tr>' +
+            '<th>Year</th><th>Title</th><th>Status</th><th class="col-actions">Actions</th></tr></thead><tbody>' +
+            rows.map(function (y) {
+              var isPublished = y.status === 'published';
+              return '<tr data-id="' + y.id + '" data-year="' + esc(y.year) + '">' +
+                '<td><b>' + esc(y.year) + '</b></td>' +
+                '<td>' + esc(y.title || '—') + '</td>' +
+                '<td>' + statusBadge(y.status) + '</td>' +
+                '<td class="col-actions">' +
+                  '<a class="btn tiny" href="' + base + '/' + y.id + '">Open</a>' +
+                  '<button class="btn tiny ghost" data-act="toggle" data-status="' + (isPublished ? 'draft' : 'published') + '">' +
+                    (isPublished ? 'Unpublish' : 'Publish') + '</button>' +
+                  '<button class="btn tiny danger" data-act="delete">Delete</button>' +
+                '</td></tr>';
+            }).join('') + '</tbody></table></div>';
+
+          body.querySelectorAll('button[data-act]').forEach(function (btn) {
+            var tr = btn.closest('tr');
+            var id = Number(tr.getAttribute('data-id'));
+            var label = tr.getAttribute('data-year');
+            btn.addEventListener('click', function () {
+              var action = btn.getAttribute('data-act');
+              if (action === 'toggle') {
+                var status = btn.getAttribute('data-status');
+                A.api(apiBase + '/' + id + '/publish', { method: 'POST', body: { status: status } })
+                  .then(function () {
+                    toast('Year page ' + label + ' → ' + (status === 'published' ? 'published' : 'draft'));
+                    load();
+                  })
+                  .catch(function (err) { toast(err.message, 'error'); });
+              } else {
+                confirmDialog('Delete year page?',
+                  'This permanently removes the ' + label + ' page and everyone listed on it for that year.', 'Delete')
+                  .then(function (ok) {
+                    if (!ok) return;
+                    A.api(apiBase + '/' + id, { method: 'DELETE' })
+                      .then(function () { toast('Year page ' + label + ' deleted.'); load(); })
+                      .catch(function (err) { toast(err.message, 'error'); });
+                  });
+              }
+            });
+          });
+        }).catch(function (err) { stateError(body, err); });
+      }
+
+      load();
+    }).catch(function (err) { stateError(el, err); });
+  }
+
+  /** #/m/societies/<sid>/years/{new|<yid>} — year page editor (MD + people). */
+  function pageYearEditor(mod, societyId, yearId) {
+    var el = view();
+    stateLoad(el, 'Loading year page…');
+
+    var socReq = A.api('/admin/societies/' + societyId);
+    var yearReq = yearId
+      ? A.api('/admin/societies/' + societyId + '/years/' + yearId)
+      : Promise.resolve(null);
+
+    Promise.all([socReq, yearReq]).then(function (res) {
+      var society = res[0];
+      var year = res[1];
+      var base = '#/m/societies/' + societyId + '/years';
+      var apiBase = '/admin/societies/' + societyId + '/years';
+
+      el.innerHTML =
+        '<div class="page-head"><h1>' + (yearId ? 'Edit' : 'New') + ' year page — ' + esc(society.name) + '</h1>' +
+          '<div class="head-actions">' +
+            (year ? statusBadge(year.status) : '') +
+            '<a class="btn ghost" href="' + base + '">&larr; Year pages</a>' +
+          '</div></div>' +
+        '<div class="panel">' +
+          '<div class="form-error" id="year-error" hidden></div>' +
+          '<form id="year-form" novalidate>' +
+            '<div class="form-field"><label for="y-year">Year <span class="req">*</span></label>' +
+              '<input type="text" id="y-year" name="y-year" value="' + esc(year ? year.year : '') + '" placeholder="e.g. 2025-26" required>' +
+              '<div class="field-error" data-error="y-year"></div></div>' +
+            '<div class="form-field"><label for="y-title">Page title (optional)</label>' +
+              '<input type="text" id="y-title" name="y-title" value="' + esc(year ? year.title || '' : '') + '" placeholder="e.g. A year of debates and workshops"></div>' +
+            '<div class="form-field"><label>Page content (Markdown)</label>' +
+              mdEditorHtml('name="y-body"', year ? year.body : '', 14, 'Write this year&#39;s page in Markdown…') + '</div>' +
+            '<div class="form-field"><label>Cover image (optional)</label>' +
+              mediaFieldHtml('cover', year ? year.cover || '' : '', 'image') + '</div>' +
+            '<div class="form-actions">' +
+              '<button type="submit" class="btn" id="year-save">' + (yearId ? 'Save year page' : 'Create year page') + '</button>' +
+              '<a class="btn ghost" href="' + base + '">Cancel</a>' +
+            '</div>' +
+          '</form>' +
+        '</div>' +
+        (year
+          ? '<div class="panel" style="margin-top:24px">' +
+              '<h2>People of ' + esc(year.year) + '</h2>' +
+              '<div id="members-body"><div class="state"><div class="spinner"></div><p>Loading…</p></div></div>' +
+              '<div id="member-form-root"></div>' +
+            '</div>'
+          : '<div class="panel" style="margin-top:24px"><h2>People of this year</h2>' +
+              '<p class="muted-note">Create the year page first — then add its officers and committee members here.</p></div>');
+
+      bindMdEditor(el.querySelector('.md-editor'));
+      bindOneMediaField(el.querySelector('.media-field[data-field="cover"]'), 'image');
+      bindYearForm(el, apiBase, base, yearId);
+      if (year) bindMembersSection(el, apiBase, yearId, year.year);
+    }).catch(function (err) { stateError(el, err); });
+  }
+
+  /** Save handler for the year page form (create + edit). */
+  function bindYearForm(el, apiBase, base, yearId) {
+    document.getElementById('year-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var errBox = document.getElementById('year-error');
+      errBox.hidden = true;
+      el.querySelectorAll('.field-error').forEach(function (n) { n.textContent = ''; });
+
+      var body = {
+        year: document.getElementById('y-year').value.trim(),
+        title: document.getElementById('y-title').value.trim() || null,
+        body: el.querySelector('.md-input').value || null,
+        cover: el.querySelector('[name="f-cover"]').value.trim() || null
+      };
+
+      if (!body.year) {
+        var fe = el.querySelector('[data-error="y-year"]');
+        if (fe) fe.textContent = 'This field is required.';
+        errBox.textContent = 'Please add a year label (e.g. 2025-26).';
+        errBox.hidden = false;
+        window.scrollTo(0, 0);
+        return;
+      }
+
+      var btn = document.getElementById('year-save');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+
+      var req = yearId
+        ? A.api(apiBase + '/' + yearId, { method: 'PUT', body: body })
+        : A.api(apiBase, { method: 'POST', body: body });
+
+      req.then(function (saved) {
+        if (!yearId && saved && saved.id) {
+          // Land in the full editor so this year's people can be added.
+          toast('Year page created — now add its people.');
+          location.hash = base + '/' + saved.id;
+          return;
+        }
+        toast('Year page saved.');
+        btn.disabled = false;
+        btn.textContent = 'Save year page';
+      }).catch(function (err) {
+        btn.disabled = false;
+        btn.textContent = yearId ? 'Save year page' : 'Create year page';
+        errBox.textContent = err.message;
+        errBox.hidden = false;
+        window.scrollTo(0, 0);
+      });
+    });
+  }
+
+  /** Members table + inline add/edit form for one year page. */
+  function bindMembersSection(el, apiBase, yearId, yearLabel) {
+    var body = el.querySelector('#members-body');
+    var formRoot = el.querySelector('#member-form-root');
+    var memberApi = apiBase + '/' + yearId + '/members';
+
+    function memberThumbHtml(m) {
+      var url = A.mediaUrl(m.photo);
+      if (url) return '<span class="member-avatar"><img src="' + esc(url) + '" alt="' + esc(m.name) + '"></span>';
+      return '<span class="member-avatar ph">' + esc(initialsOf(m.name)) + '</span>';
+    }
+
+    function load() {
+      body.innerHTML = '<div class="state"><div class="spinner"></div><p>Loading…</p></div>';
+      A.api(apiBase + '/' + yearId).then(function (year) {
+        var members = (year && year.members) || [];
+        if (!members.length) {
+          stateEmpty(body, 'No people added for ' + yearLabel + ' yet.',
+            '<p><button type="button" class="btn" id="member-add-empty">+ Add the first person</button></p>');
+          document.getElementById('member-add-empty').addEventListener('click', function () { openMemberForm(null); });
+          return;
+        }
+        body.innerHTML = '<div class="table-wrap"><table class="list-table"><thead><tr>' +
+          '<th>Photo</th><th>Name</th><th>Role</th><th>Category</th><th>Email</th><th>Sort</th><th class="col-actions">Actions</th>' +
+          '</tr></thead><tbody>' +
+          members.map(function (m) {
+            return '<tr data-id="' + m.id + '">' +
+              '<td>' + memberThumbHtml(m) + '</td>' +
+              '<td><b>' + esc(m.name) + '</b></td>' +
+              '<td>' + esc(m.role || '—') + '</td>' +
+              '<td><span class="badge ' + (m.category === 'officer' ? 'officer' : 'committee') + '">' + esc(m.category) + '</span></td>' +
+              '<td>' + esc(m.email || '—') + '</td>' +
+              '<td>' + esc(m.sort_order) + '</td>' +
+              '<td class="col-actions">' +
+                '<button class="btn tiny" data-edit>Edit</button>' +
+                '<button class="btn tiny danger" data-del>Delete</button>' +
+              '</td></tr>';
+          }).join('') + '</tbody></table></div>' +
+          '<div class="form-actions" style="margin-top:14px">' +
+            '<button type="button" class="btn" id="member-add">+ Add person</button>' +
+          '</div>';
+
+        body.querySelectorAll('tr[data-id]').forEach(function (tr) {
+          var id = Number(tr.getAttribute('data-id'));
+          var row = members.filter(function (m) { return m.id === id; })[0];
+          tr.querySelector('[data-edit]').addEventListener('click', function () { openMemberForm(row); });
+          tr.querySelector('[data-del]').addEventListener('click', function () {
+            confirmDialog('Delete person?', 'This removes "' + row.name + '" from the ' + yearLabel + ' page.', 'Delete')
+              .then(function (ok) {
+                if (!ok) return;
+                A.api(memberApi + '/' + id, { method: 'DELETE' })
+                  .then(function () { toast('Person removed.'); load(); })
+                  .catch(function (err) { toast(err.message, 'error'); });
+              });
+          });
+        });
+        document.getElementById('member-add').addEventListener('click', function () { openMemberForm(null); });
+      }).catch(function (err) { stateError(body, err); });
+    }
+
+    // The year id is the last numeric segment of the editor's hash route.
+    function openMemberForm(member) {
+      var isEdit = !!member;
+      formRoot.innerHTML =
+        '<div class="member-form" style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px">' +
+          '<h3>' + (isEdit ? 'Edit person' : 'Add a person') + '</h3>' +
+          '<div class="form-error" id="member-error" hidden></div>' +
+          '<form id="member-form" novalidate>' +
+            '<div class="grid-2">' +
+              '<div class="form-field"><label for="m-name">Name <span class="req">*</span></label>' +
+                '<input type="text" id="m-name" value="' + esc(member ? member.name : '') + '" placeholder="e.g. Ayesha Khan" required></div>' +
+              '<div class="form-field"><label for="m-role">Role / position</label>' +
+                '<input type="text" id="m-role" value="' + esc(member ? member.role || '' : '') + '" placeholder="e.g. President"></div>' +
+              '<div class="form-field"><label for="m-email">Email</label>' +
+                '<input type="email" id="m-email" value="' + esc(member ? member.email || '' : '') + '"></div>' +
+              '<div class="form-field"><label for="m-category">Category</label>' +
+                '<select id="m-category">' +
+                  '<option value="officer"' + (member && member.category === 'officer' ? ' selected' : '') + '>Officer</option>' +
+                  '<option value="committee"' + (member && member.category === 'committee' ? ' selected' : '') + '>Committee member</option>' +
+                '</select></div>' +
+              '<div class="form-field"><label for="m-sort">Sort order (lower shows first)</label>' +
+                '<input type="number" id="m-sort" value="' + esc(member ? member.sort_order : 0) + '"></div>' +
+            '</div>' +
+            '<div class="form-field"><label for="m-bio">Intro (shown under the role on the society page)</label>' +
+              '<textarea id="m-bio" rows="3" placeholder="e.g. Final year BS Computer Science — led the society to the national debate semifinals.">' +
+                esc(member ? member.bio || '' : '') + '</textarea></div>' +
+            '<div class="form-field"><label>Photo (optional)</label>' +
+              mediaFieldHtml('member-photo', member ? member.photo || '' : '', 'image') + '</div>' +
+            '<div class="form-actions">' +
+              '<button type="submit" class="btn">' + (isEdit ? 'Save person' : 'Add person') + '</button>' +
+              '<button type="button" class="btn ghost" id="member-cancel">Cancel</button>' +
+            '</div>' +
+          '</form>' +
+        '</div>';
+
+      bindOneMediaField(formRoot.querySelector('.media-field[data-field="member-photo"]'), 'image');
+
+      document.getElementById('member-cancel').addEventListener('click', function () { formRoot.innerHTML = ''; });
+      document.getElementById('member-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var errBox = document.getElementById('member-error');
+        errBox.hidden = true;
+
+        var payload = {
+          name: document.getElementById('m-name').value.trim(),
+          role: document.getElementById('m-role').value.trim() || null,
+          email: document.getElementById('m-email').value.trim() || null,
+          bio: document.getElementById('m-bio').value.trim() || null,
+          category: document.getElementById('m-category').value,
+          sort_order: Number(document.getElementById('m-sort').value) || 0,
+          photo: formRoot.querySelector('[name="f-member-photo"]').value.trim() || null
+        };
+        if (!payload.name) {
+          errBox.textContent = 'A name is required.';
+          errBox.hidden = false;
+          return;
+        }
+
+        var req = isEdit
+          ? A.api(memberApi + '/' + member.id, { method: 'PUT', body: payload })
+          : A.api(memberApi, { method: 'POST', body: payload });
+
+        req.then(function () {
+          toast('Person saved.');
+          formRoot.innerHTML = '';
+          load();
+        }).catch(function (err) {
+          errBox.textContent = err.message;
+          errBox.hidden = false;
+        });
+      });
+    }
+
+    load();
   }
 
   /** Collect the form into a plain body object with inline validation. */
@@ -534,7 +1060,14 @@
         ? A.api('/admin/' + mod.id + '/' + id, { method: 'PUT', body: body })
         : A.api('/admin/' + mod.id, { method: 'POST', body: body });
 
-      req.then(function () {
+      req.then(function (saved) {
+        if (!id && mod.child && saved && saved.id) {
+          // New parent item (e.g. a society) → land on its child manager
+          // (year pages) so staff can continue filling in the drill-down.
+          toast(upperFirst(mod.singular) + ' saved — now add its ' + mod.child.label.toLowerCase() + '.');
+          location.hash = '#/m/' + mod.id + '/' + saved.id + '/' + mod.child.route;
+          return;
+        }
         toast(mod.singular + ' saved.');
         location.hash = '#/m/' + mod.id;
       }).catch(function (err) {

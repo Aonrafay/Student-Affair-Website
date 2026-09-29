@@ -314,3 +314,70 @@ code {
 }
 
 
+
+/* ------------------------------------------- society year pages + members */
+.muted-note { color: var(--muted); font-size: 13.5px; margin: 0 0 18px; }
+
+/* Markdown editor widget (toolbar + input + preview). */
+.md-editor { display: flex; flex-direction: column; gap: 0; }
+.md-toolbar {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+  padding: 8px 10px; background: #eef2f7; border: 1px solid var(--line);
+  border-bottom: none; border-radius: 8px 8px 0 0;
+}
+.md-panes {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+  border: 1px solid var(--line); border-radius: 0 0 8px 8px; overflow: hidden;
+}
+.md-panes:has(.md-preview:not([hidden])) { border-radius: 0 0 8px 8px; }
+.md-input {
+  border: none; border-right: 1px solid var(--line); border-radius: 0;
+  font: 13.5px/1.6 ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace;
+  padding: 12px; min-height: 300px; resize: vertical; outline: none;
+}
+.md-input:focus { background: #fdfeff; }
+.md-preview {
+  background: #fbfcfe; padding: 12px 16px; overflow: auto; min-height: 300px;
+  max-height: 460px;
+}
+.md-preview[hidden] { display: none; }
+.md-preview h1, .md-preview h2, .md-preview h3,
+.md-body h1, .md-body h2, .md-body h3 { color: var(--navy); margin: 14px 0 6px; }
+.md-preview h1, .md-body h1 { font-size: 19px; }
+.md-preview h2, .md-body h2 { font-size: 16.5px; }
+.md-preview h3, .md-body h3 { font-size: 15px; }
+.md-preview p, .md-body p { margin: 8px 0; }
+.md-preview ul, .md-preview ol, .md-body ul, .md-body ol { margin: 8px 0; padding-left: 22px; }
+.md-preview img, .md-body img {
+  max-width: 100%; height: auto; border-radius: 8px;
+  border: 1px solid var(--line); margin: 10px 0;
+}
+.md-preview blockquote, .md-body blockquote {
+  margin: 10px 0; padding: 8px 14px; border-left: 3px solid var(--accent);
+  background: #f2f6fd; border-radius: 0 8px 8px 0; color: var(--muted);
+}
+.md-preview code, .md-body code {
+  background: #eef2f7; border: 1px solid var(--line); border-radius: 5px;
+  padding: 1px 6px; font-size: 12.5px;
+}
+.md-preview pre, .md-body pre {
+  background: #f2f5f9; border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; overflow: auto;
+}
+.md-preview pre code, .md-body pre code { border: none; background: none; padding: 0; }
+.md-preview a, .md-body a { word-break: break-word; }
+@media (max-width: 820px) { .md-panes { grid-template-columns: 1fr; } .md-input { border-right: none; } }
+
+/* Member avatars + category badges. */
+.member-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 50%; overflow: hidden;
+  background: #eef2f7; border: 1px solid var(--line);
+}
+.member-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.member-avatar.ph {
+  font-size: 12.5px; font-weight: 700; color: var(--navy);
+  background: linear-gradient(135deg, #dbeafe, #93c5fd);
+}
+.badge.officer { background: #1e3a8a; color: #fff; }
+.badge.committee { background: #e4edff; color: #1e3a8a; }

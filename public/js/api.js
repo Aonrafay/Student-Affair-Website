@@ -34,6 +34,25 @@
     return esc(text).replace(/\n/g, '<br>');
   }
 
+  /**
+   * Markdown → HTML via the vendored marked (js/vendor/marked.min.js —
+   * include it on pages that render Markdown, before this file). Media
+   * references stay as bare library filenames in the stored text and are
+   * resolved to upload URLs here, so content survives base-path changes.
+   */
+  function mdToHtml(md) {
+    var text = String(md == null ? '' : md);
+    if (!text.trim()) return '';
+    if (!window.marked) {
+      return textToHtml(text); // graceful degrade if the library is missing
+    }
+    text = text.replace(/(!\[[^\]]*\]\()([^)\s]+)([^)]*\))/g, function (m, pre, src, post) {
+      if (/^(https?:|\/|data:)/i.test(src)) return m;
+      return pre + (mediaUrl(src) || src) + post;
+    });
+    return window.marked.parse(text, { breaks: true, gfm: true });
+  }
+
   function mediaUrl(name) {
     return name ? BASE + '/uploads/' + encodeURIComponent(name) : null;
   }
@@ -83,6 +102,7 @@
     api: api,
     esc: esc,
     textToHtml: textToHtml,
+    mdToHtml: mdToHtml,
     mediaUrl: mediaUrl,
     fmtDate: fmtDate,
     fmtTime: fmtTime,

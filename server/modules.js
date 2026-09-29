@@ -67,9 +67,13 @@ const modules = {
     id: 'societies',
     table: 'societies',
     roles: ['admin', 'editor'],
+    // Officers/committee people now live in society_members, attached to the
+    // per-year pages in society_years (see controllers/societyYearsController.js
+    // + routes/api.js). The legacy `officers`/`team` JSON columns stay in the
+    // table for rollback safety but are no longer written.
     fields: ['slug', 'name', 'tagline', 'motto', 'purpose', 'cover',
-      'officers', 'team', 'features', 'published_at'],
-    jsonFields: ['officers', 'team', 'features'],
+      'features', 'published_at'],
+    jsonFields: ['features'],
     search: ['name', 'motto'],
     orderBy: 'name ASC',
     titleField: 'name'
@@ -91,10 +95,14 @@ const modules = {
     id: 'partners',
     table: 'partners',
     roles: ['admin', 'editor'],
-    fields: ['slug', 'name', 'category', 'logo', 'website', 'published_at'],
+    // Category is a collaboration type chosen from the fixed list in
+    // admin/js/modules.js (Strategic Partners → Community Partners); the public
+    // page groups by that order and sorts each group by `sort_order`.
+    fields: ['slug', 'name', 'category', 'description', 'cover', 'logo',
+      'website', 'sort_order', 'published_at'],
     jsonFields: [],
     search: ['name', 'category'],
-    orderBy: 'category ASC, name ASC',
+    orderBy: 'sort_order ASC, name ASC',
     titleField: 'name'
   },
 

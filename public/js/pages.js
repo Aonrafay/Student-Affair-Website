@@ -171,7 +171,7 @@
           (SA.mediaUrl(p.cover) ? '<div class="article-hero-cover"><img src="' + SA.esc(SA.mediaUrl(p.cover)) + '" alt=""></div>' : '') +
           (p.excerpt ? '<p class="lead">' + SA.esc(p.excerpt) + '</p>' : '') +
           '<hr class="divider">' +
-          '<div>' + SA.textToHtml(p.body) + '</div>' +
+          (p.body ? '<div class="md-body">' + SA.mdToHtml(p.body) + '</div>' : '') +
           '<hr class="divider">' +
           '<p><a class="btn ghost" href="' + SA.BASE + '/news" style="color:var(--navy);border-color:var(--navy)">&larr; All news</a></p>' +
         '</article>';
@@ -235,7 +235,7 @@
           '<div class="meta"><span>' + (e.start_time ? SA.fmtDateTime(e.start_time) : 'TBC') + '</span>' +
             (e.location ? '<span>' + SA.esc(e.location) + '</span>' : '') + '</div>' +
           (SA.mediaUrl(e.cover) ? '<div class="article-hero-cover"><img src="' + SA.esc(SA.mediaUrl(e.cover)) + '" alt=""></div>' : '') +
-          (e.description ? '<p class="lead">' + SA.esc(e.description) + '</p>' : '') +
+          (e.description ? '<div class="md-body">' + SA.mdToHtml(e.description) + '</div>' : '') +
           '<hr class="divider">' +
           kv +
           (e.highlights && e.highlights.length ? '<h2>Highlights</h2>' + listHtml(e.highlights) : '') +
@@ -254,7 +254,7 @@
       root.innerHTML = items.map(function (n) {
         return '<article class="notice-item">' +
           '<h3>' + SA.esc(n.title) + '</h3>' +
-          '<p>' + SA.textToHtml(n.body) + '</p>' +
+          '<div class="md-body">' + SA.mdToHtml(n.body) + '</div>' +
           '<div class="meta">' +
             '<span>' + SA.fmtDate(n.published_at) + '</span>' +
             (n.pdf ? ' &middot; <a href="' + SA.esc(SA.mediaUrl(n.pdf)) + '" target="_blank" rel="noopener">Download PDF</a>' : '') +
@@ -274,22 +274,87 @@
   }
 
   // ------------------------------------------------------ society detail ----
+  // The society keeps its timeless info (motto, purpose, features); each year
+  // ("2025-26"…) is a Markdown page with that year's officers + committee.
   function societyDetail(root, slug) {
     SITE.stateLoad(root, 'Loading society…');
     return SA.api('/societies/' + encodeURIComponent(slug)).then(function (s) {
-      const people = function (arr, title) {
-        if (!arr || !arr.length) return '';
-        return '<div class="panel"><h2>' + title + '</h2>' + arr.map(function (o) {
-          return '<div class="kv-row" style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding:8px 0"><span><b>' + SA.esc(o.name || '') + '</b>' +
-            (o.role ? ' — ' + SA.esc(o.role) : '') + '</span>' +
-            (o.email ? '<a href="mailto:' + SA.esc(o.email) + '">' + SA.esc(o.email) + '</a>' : '') +
-          '</div>';
-        }).join('') + '</div>';
+      const years = s.years || [];
+
+      // People of one year page, laid out by designation:
+      //   lead officer (first by sort order) → hero card
+      //   remaining officers                → medium cards
+      //   committee                         → compact rows
+      const photoHtml = function (m, cls) {
+        return '<span class="person-avatar ' + cls + '">' +
+          (SA.mediaUrl(m.photo)
+            ? '<img src="' + SA.esc(SA.mediaUrl(m.photo)) + '" alt="' + SA.esc(m.name) + '">'
+            : SA.esc(SA.initials(m.name))) +
+        '</span>';
       };
+
+      const heroCardHtml = function (m) {
+        return '<div class="person-hero">' + photoHtml(m, 'lg') +
+          '<div class="person-hero-info">' +
+            '<h3>' + SA.esc(m.name || '') + '</h3>' +
+            (m.role ? '<span class="person-role-badge">' + SA.esc(m.role) + '</span>' : '') +
+            (m.bio ? '<p class="person-bio">' + SA.esc(m.bio) + '</p>' : '') +
+            (m.email ? '<a class="person-email" href="mailto:' + SA.esc(m.email) + '">' + SA.esc(m.email) + '</a>' : '') +
+          '</div></div>';
+      };
+
+      const officerCardHtml = function (m) {
+        return '<div class="person-card-sm">' + photoHtml(m, 'md') +
+          '<div class="person-info">' +
+            '<b>' + SA.esc(m.name || '') + '</b>' +
+            (m.role ? '<span class="person-role">' + SA.esc(m.role) + '</span>' : '') +
+            (m.bio ? '<p class="person-bio">' + SA.esc(m.bio) + '</p>' : '') +
+            (m.email ? '<a href="mailto:' + SA.esc(m.email) + '">' + SA.esc(m.email) + '</a>' : '') +
+          '</div></div>';
+      };
+
+      const memberRowHtml = function (m) {
+        return '<div class="person-row">' + photoHtml(m, 'sm') +
+          '<span class="person-info"><b>' + SA.esc(m.name || '') + '</b>' +
+            (m.role ? '<span>' + SA.esc(m.role) + '</span>' : '') +
+            (m.email ? '<a href="mailto:' + SA.esc(m.email) + '">' + SA.esc(m.email) + '</a>' : '') +
+          '</span></div>';
+      };
+
+      const peopleHtml = function (y) {
+        const officers = (y.members || []).filter(function (m) { return m.category === 'officer'; });
+        const committee = (y.members || []).filter(function (m) { return m.category !== 'officer'; });
+        if (!officers.length && !committee.length) return '';
+        // The first officer in sort order leads the society — give them the hero
+        // card so the page reads top-down by designation.
+        const lead = officers.length ? officers[0] : null;
+        const rest = officers.slice(1);
+        return '<div class="panel people-panel">' +
+          (lead
+            ? '<h2>Office bearers</h2>' + heroCardHtml(lead) +
+              (rest.length ? '<div class="people-cards">' + rest.map(officerCardHtml).join('') + '</div>' : '')
+            : '') +
+          (committee.length
+            ? '<h2' + (lead ? ' class="people-sub"' : '') + '>Committee</h2>' +
+              '<div class="people-list">' + committee.map(memberRowHtml).join('') + '</div>'
+            : '') +
+        '</div>';
+      };
+
+      const renderYear = function (y) {
+        return (y.title ? '<h2 class="year-title">' + SA.esc(y.title) + '</h2>' : '') +
+          (SA.mediaUrl(y.cover)
+            ? '<div class="article-hero-cover"><img src="' + SA.esc(SA.mediaUrl(y.cover)) + '" alt=""></div>'
+            : '') +
+          (y.body ? '<div class="md-body">' + SA.mdToHtml(y.body) + '</div>' : '') +
+          peopleHtml(y);
+      };
+
       const featuresHtml = (s.features && s.features.length)
         ? '<ul class="tick-list">' + s.features.map(function (f) { return '<li>' + SA.esc(f) + '</li>'; }).join('') + '</ul>'
         : '';
-      root.innerHTML =
+
+      let html =
         '<article class="article">' +
           '<a class="txt-link" href="' + SA.BASE + '/societies" style="font-size:13px">&larr; All societies</a>' +
           '<h1 style="margin-top:8px">' + SA.esc(s.name) + '</h1>' +
@@ -298,9 +363,38 @@
           (s.motto ? '<blockquote class="panel" style="margin:0 0 16px;font-style:italic;color:var(--navy-soft)">&ldquo;' + SA.esc(s.motto) + '&rdquo;</blockquote>' : '') +
           (s.purpose ? '<p class="lead">' + SA.esc(s.purpose) + '</p>' : '') +
           (featuresHtml ? '<h2>What we do</h2>' + featuresHtml : '') +
-          (s.officers && s.officers.length ? people(s.officers, 'Officers') : '') +
-          (s.team && s.team.length ? people(s.team, 'Committee') : '') +
         '</article>';
+
+      if (years.length) {
+        html += '<div class="year-tabs" role="tablist" aria-label="Society years">' +
+          years.map(function (y, i) {
+            return '<button type="button" role="tab" class="year-tab' + (i === 0 ? ' active' : '') +
+              '" data-idx="' + i + '" aria-selected="' + (i === 0 ? 'true' : 'false') + '">' +
+              SA.esc(y.year) + '</button>';
+          }).join('') + '</div>' +
+          '<div id="year-content" class="article" role="tabpanel"></div>';
+      } else {
+        html += '<div class="panel" style="margin-top:24px"><p>' +
+          'This society has not published a year page yet — check back soon.</p></div>';
+      }
+
+      root.innerHTML = html;
+
+      if (years.length) {
+        const content = root.querySelector('#year-content');
+        const tabs = root.querySelectorAll('.year-tab');
+        tabs.forEach(function (tab) {
+          tab.addEventListener('click', function () {
+            tabs.forEach(function (t) {
+              t.classList.toggle('active', t === tab);
+              t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+            });
+            content.innerHTML = renderYear(years[Number(tab.getAttribute('data-idx'))]);
+            window.scrollTo({ top: content.getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' });
+          });
+        });
+        content.innerHTML = renderYear(years[0]);
+      }
     }).catch(function (err) { SITE.stateError(root, err); });
   }
 
@@ -330,10 +424,28 @@
           root.innerHTML = html;
           return;
         }
-        html += '<div class="grid-3">' + members.map(function (m) {
+        // Featured staff (the `featured` checkbox in the admin) are shown first,
+        // in a large card with a big photo; the rest keep the standard card.
+        const featured = members.filter(function (m) { return m.featured; });
+        const others = members.filter(function (m) { return !m.featured; });
+
+        const bigCard = function (m) {
+          return '<article class="card person-card person-card-lead">' +
+            '<div class="person-lead-photo">' + (SA.mediaUrl(m.photo)
+              ? '<img src="' + SA.esc(SA.mediaUrl(m.photo)) + '" alt="' + SA.esc(m.name) + '">'
+              : '<span class="ph-text">' + SA.esc(SA.initials(m.name)) + '</span>') + '</div>' +
+            '<div class="card-body">' +
+              (m.role ? '<span class="person-role-badge">' + SA.esc(m.role) + '</span>' : '') +
+              '<h3>' + SA.esc(m.name) + '</h3>' +
+              (m.bio ? '<p class="person-bio">' + SA.esc(m.bio) + '</p>' : '') +
+              (m.email ? '<a class="person-email" href="mailto:' + SA.esc(m.email) + '">' + SA.esc(m.email) + '</a>' : '') +
+            '</div>' +
+          '</article>';
+        };
+
+        const stdCard = function (m) {
           return '<article class="card person-card">' +
-            '<div class="thumb" style="height:72px;background:linear-gradient(135deg,var(--navy-soft),var(--navy))">' +
-              '<span class="ph-text" style="font-size:13px">' + SA.esc(m.role || '') + '</span></div>' +
+            '<div class="thumb person-card-photo"><span class="ph-text">' + SA.esc(m.role || '') + '</span></div>' +
             '<div class="avatar">' + (SA.mediaUrl(m.photo)
               ? '<img src="' + SA.esc(SA.mediaUrl(m.photo)) + '" alt="' + SA.esc(m.name) + '">'
               : SA.esc(SA.initials(m.name))) + '</div>' +
@@ -344,33 +456,103 @@
               (m.email ? '<a href="mailto:' + SA.esc(m.email) + '">' + SA.esc(m.email) + '</a>' : '') +
             '</div>' +
           '</article>';
-        }).join('') + '</div>';
+        };
+
+        if (featured.length) {
+          html += '<div class="office-featured">' + featured.map(bigCard).join('') + '</div>';
+        }
+        if (others.length) {
+          html += '<div class="grid-3">' + others.map(stdCard).join('') + '</div>';
+        }
         root.innerHTML = html;
       }).catch(function (err) { SITE.stateError(root, err); });
   }
   // ------------------------------------------------------------- partners ---
+  // Collaboration types, most important first. Mirrors `partnerCategories` in
+  // admin/js/modules.js (the admin select uses the same list). Any category that
+  // is not in this list (legacy rows) still renders, after the known ones.
+  const PARTNER_CATEGORIES = [
+    'Strategic Partners',
+    'Academic Collaborations',
+    'Industry Partners',
+    'Community Partners'
+  ];
+
+  function partnerLogoHtml(p, maxHeight) {
+    return SA.mediaUrl(p.logo)
+      ? '<img src="' + SA.esc(SA.mediaUrl(p.logo)) + '" alt="' + SA.esc(p.name) + '" style="max-height:' + maxHeight + 'px;width:auto;margin:0 auto">'
+      : '<span aria-hidden="true">&#129309;</span>';
+  }
+
   function partners(root) {
     SITE.stateLoad(root, 'Loading partners…');
     return SA.api('/partners').then(function (items) {
       if (!items.length) return SITE.stateEmpty(root, 'No partners are listed yet. Contact the office if you would like your organisation featured here.');
+
+      // Group by category, keeping the fixed importance order; anything unknown
+      // goes last, alphabetically.
       const grouped = {};
       items.forEach(function (p) {
         const cat = p.category || 'Partners';
         (grouped[cat] = grouped[cat] || []).push(p);
       });
-      root.innerHTML = Object.keys(grouped).map(function (cat) {
-        return '<section style="margin-bottom:32px"><h2 style="color:var(--navy)">' + SA.esc(cat) + '</h2>' +
-          '<div class="grid-4">' + grouped[cat].map(function (p) {
-            const inner = '<div class="card partner-tile">' +
-              '<span class="logo">' + (SA.mediaUrl(p.logo)
-                ? '<img src="' + SA.esc(SA.mediaUrl(p.logo)) + '" alt="' + SA.esc(p.name) + '" style="max-height:44px;width:auto;margin:0 auto">'
-                : '&#129309;') + '</span>' +
-              '<b>' + SA.esc(p.name) + '</b></div>';
-            return p.website
-              ? '<a class="card-link" href="' + SA.esc(p.website) + '" target="_blank" rel="noopener">' + inner + '</a>'
-              : inner;
-          }).join('') + '</div></section>';
+      Object.keys(grouped).forEach(function (cat) {
+        grouped[cat].sort(function (a, b) {
+          const d = (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0);
+          return d !== 0 ? d : a.name.localeCompare(b.name);
+        });
+      });
+      const known = PARTNER_CATEGORIES.filter(function (c) { return grouped[c]; });
+      const extra = Object.keys(grouped).filter(function (c) { return PARTNER_CATEGORIES.indexOf(c) === -1; }).sort();
+      const order = known.concat(extra);
+
+      root.innerHTML = order.map(function (cat) {
+        const list = grouped[cat];
+        // The most important partner of the category (lowest sort order) gets
+        // the spotlight card; the rest are standard tiles.
+        const lead = list[0];
+        const rest = list.slice(1);
+        const tile = function (p) {
+          return '<a class="card-link" href="' + SA.BASE + '/partners/' + encodeURIComponent(p.slug) + '">' +
+            '<div class="card partner-tile"><span class="logo">' + partnerLogoHtml(p, 44) + '</span>' +
+            '<b>' + SA.esc(p.name) + '</b></div></a>';
+        };
+        const spotlight = '<a class="card-link" href="' + SA.BASE + '/partners/' + encodeURIComponent(lead.slug) + '">' +
+          '<div class="card partner-tile partner-spotlight"><span class="logo">' + partnerLogoHtml(lead, 64) + '</span>' +
+          '<b>' + SA.esc(lead.name) + '</b>' +
+          (lead.website ? '<span class="spotlight-link">View partnership &rarr;</span>' : '') + '</div></a>';
+
+        return '<section class="partner-section">' +
+          '<h2>' + SA.esc(cat) + '</h2>' +
+          '<div class="grid-4 partner-grid">' + spotlight + rest.map(tile).join('') + '</div>' +
+        '</section>';
       }).join('');
+    }).catch(function (err) { SITE.stateError(root, err); });
+  }
+
+  // ------------------------------------------------------- partner detail ---
+  function partnerDetail(root, slug) {
+    SITE.stateLoad(root, 'Loading partner…');
+    return SA.api('/partners/' + encodeURIComponent(slug)).then(function (p) {
+      root.innerHTML =
+        '<article class="article partner-detail">' +
+          '<a class="txt-link" href="' + SA.BASE + '/partners" style="font-size:13px">&larr; All partners</a>' +
+          '<div class="partner-detail-head">' +
+            '<span class="partner-detail-logo">' + partnerLogoHtml(p, 72) + '</span>' +
+            '<div>' +
+              (p.category ? '<span class="partner-cat-badge">' + SA.esc(p.category) + '</span>' : '') +
+              '<h1 style="margin:6px 0 0">' + SA.esc(p.name) + '</h1>' +
+            '</div>' +
+          '</div>' +
+          (SA.mediaUrl(p.cover)
+            ? '<div class="article-hero-cover"><img src="' + SA.esc(SA.mediaUrl(p.cover)) + '" alt=""></div>'
+            : '') +
+          (p.description ? '<div class="md-body">' + SA.mdToHtml(p.description) + '</div>' : '') +
+          (p.website
+            ? '<p style="margin-top:22px"><a class="btn" href="' + SA.esc(p.website) + '" target="_blank" rel="noopener">Visit website &nearr;</a></p>'
+            : '') +
+          '<p style="margin-top:26px"><a class="btn ghost" href="' + SA.BASE + '/partners" style="color:var(--navy);border-color:var(--navy)">&larr; All partners</a></p>' +
+        '</article>';
     }).catch(function (err) { SITE.stateError(root, err); });
   }
 
@@ -451,6 +633,7 @@
     societyDetail: societyDetail,
     office: office,
     partners: partners,
+    partnerDetail: partnerDetail,
     documents: documents,
     contact: contact
   };

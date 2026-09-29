@@ -2,7 +2,8 @@
    Student Affairs CMS — admin module registry (mirrors server/modules.js)
    Each entry drives the sidebar, list table and generated form.
    Field types: text | textarea | select | json | media | checkbox |
-                date | datetime-local | slug | number | email | password | url
+                 date | datetime-local | slug | number | email | password | url |
+                 markdown (Markdown editor: toolbar + live preview + image insert)
    Adding a module? Add it on the server (server/modules.js) and mirror the
    field config here. See README → "Adding a future module".
    ========================================================================== */
@@ -29,7 +30,7 @@
           ['news', 'News'], ['announcement', 'Announcement'], ['achievement', 'Achievement']
         ] },
         { name: 'excerpt', label: 'Excerpt (short summary shown in lists)', type: 'textarea', rows: 2 },
-        { name: 'body', label: 'Body', type: 'textarea', rows: 12, required: true },
+        { name: 'body', label: 'Article (Markdown)', type: 'markdown', required: true, rows: 18 },
         { name: 'cover', label: 'Cover image', type: 'media', accept: 'image' },
         { name: 'published_at', label: 'Publish date (optional)', type: 'datetime-local' },
         { name: 'slug', label: 'Slug (left empty → generated from title)', type: 'slug' }
@@ -51,7 +52,7 @@
       ],
       fields: [
         { name: 'title', label: 'Title', type: 'text', required: true },
-        { name: 'description', label: 'Short description', type: 'textarea', rows: 3 },
+        { name: 'description', label: 'Description (Markdown)', type: 'markdown', rows: 10 },
         { name: 'start_time', label: 'Starts', type: 'datetime-local' },
         { name: 'end_time', label: 'Ends', type: 'datetime-local' },
         { name: 'location', label: 'Location', type: 'text' },
@@ -78,7 +79,7 @@
       ],
       fields: [
         { name: 'title', label: 'Title', type: 'text', required: true },
-        { name: 'body', label: 'Notice text', type: 'textarea', rows: 8, required: true },
+        { name: 'body', label: 'Notice text (Markdown)', type: 'markdown', required: true, rows: 10 },
         { name: 'pdf', label: 'Attached PDF (optional)', type: 'media', accept: 'pdf' },
         { name: 'published_at', label: 'Publish date (optional)', type: 'datetime-local' },
         { name: 'slug', label: 'Slug (left empty → generated from title)', type: 'slug' }
@@ -92,6 +93,10 @@
       icon: '&#127917;',
       roles: ['admin', 'editor'],
       titleField: 'name',
+      // Drill-down: societies contain per-year Markdown pages, and each year
+      // page carries its own officers/committee (people) — handled by custom
+      // routes in admin.js (#/m/societies/<id>/years[/new|/<yid>]).
+      child: { route: 'years', label: 'Years', singular: 'year page' },
       columns: [
         { key: 'name', label: 'Name', primary: true },
         { key: 'tagline', label: 'Tagline' },
@@ -104,8 +109,6 @@
         { name: 'purpose', label: 'Purpose / description', type: 'textarea', rows: 6 },
         { name: 'cover', label: 'Cover image', type: 'media', accept: 'image' },
         { name: 'features', label: 'What we do (one per line)', type: 'json', jsonMode: 'lines' },
-        { name: 'officers', label: 'Officers — JSON array, e.g. [{"name":"…","role":"…","email":"…"}]', type: 'json', jsonMode: 'object' },
-        { name: 'team', label: 'Committee — JSON array, e.g. [{"name":"…","role":"…"}]', type: 'json', jsonMode: 'object' },
         { name: 'slug', label: 'Slug (left empty → generated from name)', type: 'slug' }
       ]
     },
@@ -142,16 +145,34 @@
       icon: '&#129309;',
       roles: ['admin', 'editor'],
       titleField: 'name',
+      // Collaboration types, most important first — the public partners page
+      // renders the groups in exactly this order. Keep in sync with
+      // PARTNER_CATEGORIES in public/js/pages.js.
+      partnerCategories: [
+        'Strategic Partners',
+        'Academic Collaborations',
+        'Industry Partners',
+        'Community Partners'
+      ],
       columns: [
         { key: 'name', label: 'Name', primary: true },
         { key: 'category', label: 'Category', badge: true },
+        { key: 'sort_order', label: 'Sort' },
         { key: 'status', label: 'Status', status: true }
       ],
       fields: [
         { name: 'name', label: 'Partner name', type: 'text', required: true },
-        { name: 'category', label: 'Category (groups the tiles)', type: 'text' },
-        { name: 'logo', label: 'Logo', type: 'media', accept: 'image' },
+        { name: 'category', label: 'Collaboration type', type: 'select', required: true, options: [
+          ['Strategic Partners', 'Strategic Partners'],
+          ['Academic Collaborations', 'Academic Collaborations'],
+          ['Industry Partners', 'Industry Partners'],
+          ['Community Partners', 'Community Partners']
+        ] },
+        { name: 'description', label: 'About this partnership (Markdown)', type: 'markdown', rows: 12 },
+        { name: 'cover', label: 'Cover image (partner page)', type: 'media', accept: 'image' },
+        { name: 'logo', label: 'Logo (shown on the partners grid)', type: 'media', accept: 'image' },
         { name: 'website', label: 'Website (https://…)', type: 'url' },
+        { name: 'sort_order', label: 'Importance — lower shows first (its top partner gets the big card)', type: 'number' },
         { name: 'slug', label: 'Slug (left empty → generated from name)', type: 'slug' }
       ]
     },

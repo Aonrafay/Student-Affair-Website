@@ -109,6 +109,44 @@ CREATE TABLE IF NOT EXISTS societies (
   published_at TIMESTAMP    NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- One page per society per year (e.g. "2025-26"). The page body is Markdown
+-- that can embed media-library images as ![alt](<uploaded filename>). People
+-- attach to a specific year page — society cabinets change every year.
+CREATE TABLE IF NOT EXISTS society_years (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  society_id   INT          NOT NULL,
+  `year`       VARCHAR(20)  NOT NULL,
+  title        VARCHAR(190) NULL,
+  body         MEDIUMTEXT   NULL,          -- Markdown
+  cover        VARCHAR(255) NULL,
+  status       ENUM('draft','published') NOT NULL DEFAULT 'draft',
+  created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  published_at TIMESTAMP    NULL DEFAULT NULL,
+  INDEX idx_society_years (society_id, status, `year` DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Officers + committee of one society year page.
+CREATE TABLE IF NOT EXISTS society_members (
+  id               INT AUTO_INCREMENT PRIMARY KEY,
+  society_year_id  INT          NOT NULL,
+  name             VARCHAR(190) NOT NULL,
+  role             VARCHAR(190) NULL,
+  email            VARCHAR(190) NULL,
+  bio              TEXT         NULL,          -- short intro shown on the society page
+  photo            VARCHAR(255) NULL,
+  category         ENUM('officer','committee') NOT NULL DEFAULT 'committee',
+  sort_order       INT          NOT NULL DEFAULT 0,
+  created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_society_members (society_year_id, category, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Brings society_members created by an earlier version up to date. MySQL has no
+-- "ADD COLUMN IF NOT EXISTS", so this is re-run on every boot and migrate.js
+-- treats "duplicate column" (errno 1060) as already applied.
+ALTER TABLE society_members ADD COLUMN bio TEXT NULL;
+
 CREATE TABLE IF NOT EXISTS team_members (
   id           INT AUTO_INCREMENT PRIMARY KEY,
   slug         VARCHAR(190) NOT NULL UNIQUE,
@@ -129,14 +167,26 @@ CREATE TABLE IF NOT EXISTS partners (
   id           INT AUTO_INCREMENT PRIMARY KEY,
   slug         VARCHAR(190) NOT NULL UNIQUE,
   name         VARCHAR(190) NOT NULL,
-  category     VARCHAR(190) NULL,
+  category     VARCHAR(190) NULL,          -- collaboration type (admin select)
+  description  MEDIUMTEXT   NULL,          -- Markdown story shown on the partner page
+  cover        VARCHAR(255) NULL,          -- hero image for the partner page
   logo         VARCHAR(255) NULL,
   website      VARCHAR(500) NULL,
+  sort_order   INT          NOT NULL DEFAULT 0,  -- lower = more important in its category
   status       ENUM('draft','published') NOT NULL DEFAULT 'draft',
   created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   published_at TIMESTAMP    NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Brings a `partners` table created by an earlier version up to date: the
+-- Markdown story, the detail-page cover, and the importance order. Like the
+-- society_members ALTER above this runs on every boot, and migrate.js treats
+-- "duplicate column" (errno 1060) as already applied.
+ALTER TABLE partners
+  ADD COLUMN description MEDIUMTEXT NULL,
+  ADD COLUMN cover VARCHAR(255) NULL,
+  ADD COLUMN sort_order INT NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS documents (
   id           INT AUTO_INCREMENT PRIMARY KEY,

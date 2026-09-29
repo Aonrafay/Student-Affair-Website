@@ -17,7 +17,17 @@ async function migrate() {
     .filter((s) => /^(CREATE|ALTER)/i.test(s));
 
   for (const stmt of statements) {
-    await q(stmt);
+    try {
+      await q(stmt);
+    } catch (e) {
+      // MySQL has no "ADD COLUMN IF NOT EXISTS", so the ALTERs that upgrade an
+      // older installation are re-run on every boot. Reaching this point on the
+      // second boot means the change is already there — that is success, not a
+      // failure. Anything else is a real error and must stop the boot.
+      const alreadyThere = e.code === 'ER_DUP_FIELDNAME' || e.errno === 1060;
+      if (!alreadyThere) throw e;
+      console.log(`  skipped (already applied): ${stmt.slice(0, 60)}…`);
+    }
   }
   console.log(`Migration complete — applied ${statements.length} statement(s).`);
 }

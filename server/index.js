@@ -71,6 +71,7 @@ const htmlRoutes = {
   '/societies/:slug': 'public/society-details.html',
   '/office': 'public/office.html',
   '/partners': 'public/partners.html',
+  '/partners/:slug': 'public/partner-details.html',
   '/documents': 'public/documents.html',
   '/contact': 'public/contact.html',
   '/admin': 'admin/index.html',
