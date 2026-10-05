@@ -76,7 +76,7 @@ curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker $USER && newgrp docker   # run docker without sudo
 
 # 2. Get the code
-git clone https://github.com/maisum77/Student-Affair-Website.git
+git clone https://github.com/Aonrafay/Student-Affair-Website.git
 cd Student-Affair-Website
 
 # 3. Secrets — this file is git-ignored, never commit it.
@@ -111,13 +111,14 @@ Then from any machine on the LAN:
   after a VM reboot (Docker starts by default).
 - **Update after code changes** — `git pull && docker compose up -d --build`. MySQL data and
   uploaded media live in the named volumes `db_data` / `uploads_data`, so rebuilds don't lose them.
-- **Backups** —
+- **Backups** — never hardcode the password; read it from `.env`:
   ```bash
-  docker compose exec db sh -c 'exec mysqldump -usa -p"sa" student_affairs' > backup.sql
-  docker run --rm -v student-affair-website_uploads_data:/data -v "$PWD":/bkp alpine \
-      tar czf /bkp/uploads.tgz -C /data .
+  DB_PASSWORD=$(grep -E '^DB_PASSWORD=' .env | cut -d= -f2-)
+  docker compose exec -T db sh -c "exec mysqldump -usa -p'$DB_PASSWORD' \
+      --single-transaction --routines --triggers student_affairs" | gzip -9 > backup.sql.gz
+  docker compose exec -T app tar czf - -C /app uploads > uploads.tgz
   ```
-  (Use the real `DB_PASSWORD` from `.env` in the `mysqldump` command.)
+  `--single-transaction` keeps the dump consistent without locking the site out.
 - **Port 80 instead of 5000** (optional) — change the compose port mapping to `"80:5000"`, or put
   nginx on the VM using the proxy block below. When university IT mounts the app under the real
   domain nothing else changes — `BASE_PATH=/student-affairs` already matches.
