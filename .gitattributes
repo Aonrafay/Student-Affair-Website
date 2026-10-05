@@ -1,0 +1,19 @@
+# The ops/*.sh scripts run on the Ubuntu VM. If a Windows checkout ever commits
+# them with CRLF, bash fails on the shebang line ("/bin/bash^M: bad interpreter")
+# and every backup silently stops working. Pin the line endings per file type.
+* text=auto
+
+*.sh    text eol=lf
+*.yml   text eol=lf
+*.sql   text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+.gitignore text eol=lf
+
+# PowerShell tooling runs on Windows only.
+*.ps1   text eol=crlf
+
+# Vendored library - never touch.
+public/js/vendor/*.js  -text
+admin/js/vendor/*.js   -text
