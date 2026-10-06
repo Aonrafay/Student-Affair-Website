@@ -171,9 +171,14 @@ fi
 # further down, once those artifacts exist.
 # `|| true` matters: grep exits 1 when it matches nothing, and under pipefail
 # that would abort the run silently.
-SRC_FILE="$(zcat "$DIR_DAILY/$STAMP.sql.gz" | grep -oE "SOURCE_LOG_FILE='[^']+'" | head -1 | cut -d"'" -f2- || true)"
-SRC_POS="$(zcat "$DIR_DAILY/$STAMP.sql.gz" | grep -oE 'SOURCE_LOG_POS=[0-9]+' | head -1 | cut -d= -f2- || true)"
-[ -n "$SRC_POS" ] || SRC_POS="$(zcat "$DIR_DAILY/$STAMP.sql.gz" | grep -oE 'MASTER_LOG_POS=[0-9]+' | head -1 | cut -d= -f2- || true)"
+#
+# The quotes must come OFF the filename. `cut -d"'" -f2-` leaves the trailing
+# quote attached, which restore-to-time.sh then fails to match against its
+# archive listing - and the fallback replay path is far more expensive.
+SRC_FILE="$(zcat "$DIR_DAILY/$STAMP.sql.gz" \
+  | grep -oE "SOURCE_LOG_FILE='[^']*'" | head -1 | sed "s/^[^']*'//; s/'$//" || true)"
+SRC_POS="$(zcat "$DIR_DAILY/$STAMP.sql.gz" | grep -oE 'SOURCE_LOG_POS=[0-9]+' | head -1 | cut -d= -f2 || true)"
+[ -n "$SRC_POS" ] || SRC_POS="$(zcat "$DIR_DAILY/$STAMP.sql.gz" | grep -oE 'MASTER_LOG_POS=[0-9]+' | head -1 | cut -d= -f2 || true)"
 DB_SHA="$(sha256sum "$DIR_DAILY/$STAMP.sql.gz" | cut -d' ' -f1)"
 printf 'stamp=%s\nbinlog_file=%s\nbinlog_pos=%s\ntables=%s\ncommit=%s\ntaken_at=%s\ndb_sha256=%s\n' \
   "$STAMP" "$SRC_FILE" "$SRC_POS" "$DB_TABLES" "$COMMIT" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$DB_SHA" \

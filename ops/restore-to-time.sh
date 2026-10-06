@@ -144,18 +144,27 @@ for a in "$DIR_BINLOG"/*.tgz; do
 done
 [ "$FOUND_ANY" -eq 1 ] || die "no binlog archives found under $DIR_BINLOG"
 
-# Order the logs, and keep only those at or after the dump's starting position.
+# Order the logs, and start at the dump's binlog position.
 mapfile -t LOGFILES < <(find "$WORK" -name 'binlog.[0-9]*' -printf '%f\n' | sort)
 if [ "${#LOGFILES[@]}" -eq 0 ]; then die "binlog archives contained no binlog files"; fi
+
 START_IDX=0
+APPLY_POS=1
 if [ -n "$SRC_FILE" ]; then
+  FOUND=0
   for i in "${!LOGFILES[@]}"; do
-    if [ "${LOGFILES[$i]}" = "$SRC_FILE" ]; then START_IDX=$i; break; fi
+    if [ "${LOGFILES[$i]}" = "$SRC_FILE" ]; then START_IDX=$i; FOUND=1; break; fi
   done
-  # The active log at dump time is often not archived yet; start from the next
-  # archived file in that case.
-  if [ "${LOGFILES[$START_IDX]}" != "$SRC_FILE" ]; then
-    log "  $SRC_FILE is not in the archives (it was still active at dump time) - replaying from ${LOGFILES[$START_IDX]}"
+  if [ "$FOUND" -eq 0 ]; then
+    # The log the dump came from was still active at dump time, so it was not
+    # archived. Start from the earliest archive we DO have - and crucially drop
+    # the start-position, because that offset means nothing in a different file.
+    # Applying it anyway makes mysqlbinlog abort on the first read
+    # ("Could not read entry at offset N"), and the replay silently applies
+    # nothing at all.
+    log "  $SRC_FILE was never archived; replaying from ${LOGFILES[0]} with no start-position"
+    START_IDX=0
+    APPLY_POS=0
   fi
 fi
 REPLAY=("${LOGFILES[@]:$START_IDX}")
@@ -208,7 +217,7 @@ log "importing $CHOSEN into $TARGET_DB"
 # --- 2. replay the binary logs ----------------------------------------------
 # --start-position applies to the first file only; --stop-datetime cuts every
 # file off at the target moment, which is what makes this "restore to a time".
-if [ "${#REPLAY[@]}" -gt 0 ] && [ -n "$SRC_POS" ] && [ "$SRC_POS" -gt 0 ]; then
+if [ "${#REPLAY[@]}" -gt 0 ] && { [ "$APPLY_POS" -eq 0 ] || { [ -n "$SRC_POS" ] && [ "$SRC_POS" -gt 0 ]; }; }; then
   log "replaying to $TARGET_SQL"
   PATHS=()
   for f in "${REPLAY[@]}"; do PATHS+=("$WORK/$f"); done
@@ -234,20 +243,32 @@ if [ "${#REPLAY[@]}" -gt 0 ] && [ -n "$SRC_POS" ] && [ "$SRC_POS" -gt 0 ]; then
     REWRITE=(--rewrite-db="$LIVE_DB->$TARGET_DB")
   fi
 
-  ERRLOG="$BACKUPS/restore-errors-$(date -u '+%Y%m%d-%H%M%S').log"
-  if ! mysqlbinlog --start-position="$SRC_POS" --stop-datetime="$TARGET_SQL" "${REWRITE[@]}" "${PATHS[@]}" \
-        | docker compose exec -T -e MYSQL_PWD="$ROOT_PASSWORD" db \
-            mysql -uroot "$TARGET_DB" --force 2>"$ERRLOG"; then
-    log "WARNING: mysqlbinlog exited non-zero - full error log at $ERRLOG"
-  fi
+  POS_ARGS=()
+  if [ "$APPLY_POS" -eq 1 ]; then POS_ARGS=(--start-position="$SRC_POS"); fi
 
-  ERRS="$(grep -c '^ERROR' "$ERRLOG" 2>/dev/null || echo 0)"
-  if [ "${ERRS:-0}" -gt 0 ]; then
+  ERRLOG="$BACKUPS/restore-errors-$(date -u '+%Y%m%d-%H%M%S').log"
+  MYSQLBINLOG_RC=0
+  mysqlbinlog "${POS_ARGS[@]}" --stop-datetime="$TARGET_SQL" "${REWRITE[@]}" "${PATHS[@]}" \
+    | docker compose exec -T -e MYSQL_PWD="$ROOT_PASSWORD" db \
+        mysql -uroot "$TARGET_DB" --force 2>"$ERRLOG" || MYSQLBINLOG_RC=$?
+
+  # grep -c prints 0 and exits 1 when nothing matches, so normalise both.
+  ERRS="$(grep -c 'ERROR' "$ERRLOG" 2>/dev/null || true)"
+  ERRS="${ERRS//[^0-9]/}"
+  [ -n "$ERRS" ] || ERRS=0
+
+  # mysqlbinlog itself failing is NOT the same as "replayed cleanly". Reporting
+  # a clean replay after mysqlbinlog aborted would be the most dangerous kind of
+  # wrong: the operator believes the recovery worked.
+  if [ "$MYSQLBINLOG_RC" -ne 0 ]; then
+    log "WARNING: the replay did NOT complete cleanly (mysqlbinlog exit $MYSQLBINLOG_RC)."
+    log "  This recovery is INCOMPLETE. Treat it as suspect and read $ERRLOG:"
+    grep -E 'ERROR|truncated|Could not read' "$ERRLOG" 2>/dev/null | head -5 | sed 's/^/    /'
+  elif [ "$ERRS" -gt 0 ]; then
     log "WARNING: replay reported $ERRS error(s); the rest applied. Summary:"
     grep '^ERROR' "$ERRLOG" | sed -E 's/[0-9]+ for key/KEY/' | sort | uniq -c | sort -rn \
       | head -8 | sed 's/^/    /'
     log "  full log: $ERRLOG"
-    # A conflict on a content table means real data was skipped; say so plainly.
     if grep -qE "for key '(posts|events|notices|societies|team_members|partners|documents|pages)'\." "$ERRLOG"; then
       log "  *** at least one CONTENT table had a conflict - inspect before trusting this recovery ***"
     fi
@@ -256,7 +277,7 @@ if [ "${#REPLAY[@]}" -gt 0 ] && [ -n "$SRC_POS" ] && [ "$SRC_POS" -gt 0 ]; then
     rm -f "$ERRLOG"
   fi
 else
-  log "no binlog position recorded or nothing to replay - stopping at the dump"
+  log "no usable binlog position - stopping at the dump (no replay performed)"
 fi
 
 # --- 3. report ---------------------------------------------------------------
