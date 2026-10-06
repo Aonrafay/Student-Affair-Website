@@ -9,7 +9,9 @@ set -euo pipefail
 BASE=/opt/student-affairs
 APP="$BASE/app"
 REPO=https://github.com/Aonrafay/Student-Affair-Website.git
-BRANCH=main
+# Overridable so a branch can be deployed for testing:
+#   BRANCH=security-and-backups bash /opt/student-affairs/deploy.sh
+BRANCH="${BRANCH:-main}"
 
 step() { echo; echo "===== $* ====="; }
 
