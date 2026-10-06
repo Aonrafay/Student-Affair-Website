@@ -949,7 +949,7 @@ function mdEditorHtml(nameAttr, value, rows, placeholder) {
 
       strip.querySelector('#imgstrip-add').addEventListener('click', function () {
         openMediaPicker('image', function (filename, alt) {
-          insertAtCursor(ta, '![' + (alt || mediaAlt(filename)) + '](' + filename + ')');
+          insertAtCursor(ta, '\n\n![' + (alt || mediaAlt(filename)) + '](' + filename + ')\n\n');
           refresh();
           paintStrip();
         });
@@ -987,7 +987,7 @@ function mdEditorHtml(nameAttr, value, rows, placeholder) {
       btn.addEventListener('click', function () {
         if (btn.getAttribute('data-md-cmd') === 'image') {
           openMediaPicker('image', function (filename, alt) {
-            insertAtCursor(ta, '![' + (alt || mediaAlt(filename)) + '](' + filename + ')');
+            insertAtCursor(ta, '\n\n![' + (alt || mediaAlt(filename)) + '](' + filename + ')\n\n');
             refresh();
             paintStrip();
           });
