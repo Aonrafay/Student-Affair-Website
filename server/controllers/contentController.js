@@ -2,6 +2,7 @@
 
 const { q, qOne } = require('../config/db');
 const { parseJSON } = require('../lib/helpers');
+const audit = require('../lib/audit');
 const modules = require('../modules');
 
 /** Only real module definitions — never the (non-enumerable) `list` helper. */
@@ -72,6 +73,7 @@ async function updatePage(req, res) {
 
   const page = await qOne('SELECT * FROM pages WHERE `key` = ?', [key]);
   page.content = parseJSON(page.content, {});
+  audit.record(req, 'page.update', { module: 'pages', target: key });
   return res.json(page);
 }
 
@@ -104,6 +106,11 @@ async function updateSettings(req, res) {
       [safeKey, safeValue]
     );
   }
+  audit.record(req, 'settings.update', {
+    module: 'settings',
+    target: keys.join(', ').slice(0, 255),
+    meta: { keys: keys.slice(0, 40) }
+  });
   return getAdminSettings(req, res);
 }
 

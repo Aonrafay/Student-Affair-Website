@@ -5,6 +5,8 @@ const path = require('path');
 const multer = require('multer');
 const { q, qOne } = require('../config/db');
 const paths = require('../config/paths');
+const quota = require('../lib/uploadsQuota');
+const audit = require('../lib/audit');
 
 // SVG is deliberately NOT allowed. An SVG is an XML document that can carry
 // <script>, and uploads are served from the same origin as the admin panel by
@@ -49,6 +51,15 @@ function handleUpload(req, res) {
     if (!req.file) {
       return res.status(400).json({ error: 'No file received. Use a field named "file".' });
     }
+    // Disk guard: multer has already written the file to disk by this point,
+    // so the quota check has to happen before the row is created AND the
+    // orphaned file has to be removed when the limit is hit.
+    try {
+      quota.assertRoom(paths.uploads, req.file.size, req.file.original_name || req.file.filename);
+    } catch (e) {
+      try { fs.unlinkSync(path.filePath); } catch (cleanupErr) { /* best effort */ }
+      return res.status(e.status || 507).json({ error: e.message });
+    }
     try {
       const result = await q(
         'INSERT INTO media (filename, original_name, mime, size, caption) VALUES (?, ?, ?, ?, ?)',
@@ -61,6 +72,11 @@ function handleUpload(req, res) {
         ]
       );
       const row = await qOne('SELECT * FROM media WHERE id = ?', [result.insertId]);
+      audit.record(req, 'media.upload', {
+        module: 'media',
+        target: row.original_name || row.filename,
+        meta: { bytes: row.size, mime: row.mime }
+      });
       return res.status(201).json(row);
     } catch (e) {
       return res.status(500).json({ error: 'Could not record upload: ' + e.message });
@@ -83,9 +99,25 @@ async function deleteMedia(req, res) {
   const filePath = path.join(paths.uploads, row.filename);
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
+    // The cached total is now stale by at least one file.
+    quota.invalidate();
   }
   await q('DELETE FROM media WHERE id = ?', [req.params.id]);
+  audit.record(req, 'media.delete', { module: 'media', target: row.original_name || row.filename });
   return res.json({ ok: true });
 }
 
-module.exports = { handleUpload, listMedia, deleteMedia, ALLOWED_TYPES };
+/** Disk usage of the media library, for the admin dashboard. */
+async function mediaUsage(req, res) {
+  const used = quota.usage(paths.uploads);
+  const cap = quota.maxBytes();
+  return res.json({
+    used_bytes: used,
+    max_bytes: cap,
+    used_label: quota.formatBytes(used),
+    max_label: cap ? quota.formatBytes(cap) : null,
+    count: (await qOne('SELECT COUNT(*) AS c FROM media')).c
+  });
+}
+
+module.exports = { handleUpload, listMedia, deleteMedia, mediaUsage, ALLOWED_TYPES };

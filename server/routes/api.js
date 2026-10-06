@@ -7,6 +7,7 @@ const authController = require('../controllers/authController');
 const contentController = require('../controllers/contentController');
 const mediaController = require('../controllers/mediaController');
 const usersController = require('../controllers/usersController');
+const auditController = require('../lib/audit');
 const { protect, requireRole, requireModuleRole } = require('../middleware/authMiddleware');
 const { loginLimiter } = require('../middleware/rateLimit');
 const societyYearsController = require('../controllers/societyYearsController');
@@ -154,7 +155,7 @@ function buildApiRouter() {
 
     router.post(base, requireModuleRole(def), h(async (req, res) => {
       try {
-        res.status(201).json(stripLegacy(await crud.create(req.body || {})));
+        res.status(201).json(stripLegacy(await crud.create(req, req.body || {})));
       } catch (e) {
         res.status(400).json({ error: e.message });
       }
@@ -163,7 +164,7 @@ function buildApiRouter() {
     router.post(`${base}/:id(\\d+)/publish`, requireModuleRole(def), h(async (req, res) => {
       try {
         const status = (req.body && req.body.status) || 'published';
-        const row = await crud.setStatus(Number(req.params.id), status);
+        const row = await crud.setStatus(req, Number(req.params.id), status);
         if (!row) return res.status(404).json({ error: 'Not found.' });
         res.json(stripLegacy(row));
       } catch (e) {
@@ -173,7 +174,7 @@ function buildApiRouter() {
 
     router.put(`${base}/:id(\\d+)`, requireModuleRole(def), h(async (req, res) => {
       try {
-        const row = await crud.update(Number(req.params.id), req.body || {});
+        const row = await crud.update(req, Number(req.params.id), req.body || {});
         if (!row) return res.status(404).json({ error: 'Not found.' });
         res.json(stripLegacy(row));
       } catch (e) {
@@ -182,7 +183,7 @@ function buildApiRouter() {
     }));
 
     router.delete(`${base}/:id(\\d+)`, requireModuleRole(def), h(async (req, res) => {
-      await crud.remove(Number(req.params.id));
+      await crud.remove(req, Number(req.params.id));
       res.json({ ok: true });
     }));
   }
@@ -191,6 +192,10 @@ function buildApiRouter() {
   router.get('/admin/media', h(mediaController.listMedia));
   router.post('/admin/media', h(mediaController.handleUpload));
   router.delete('/admin/media/:id(\\d+)', h(mediaController.deleteMedia));
+  // Disk usage of the media library: drives the admin dashboard gauge and is
+  // what the uploads quota enforces. Declared before the :id route pattern
+  // would otherwise swallow "usage".
+  router.get('/admin/media/usage', h(mediaController.mediaUsage));
 
   // Dashboard stats — any authenticated staff member.
   router.get('/admin/stats', h(contentController.stats));
@@ -207,6 +212,12 @@ function buildApiRouter() {
   router.put('/admin/pages/:key', requireRole('admin'), h(contentController.updatePage));
   router.get('/admin/settings', requireRole('admin'), h(contentController.getAdminSettings));
   router.put('/admin/settings', requireRole('admin'), h(contentController.updateSettings));
+
+  // Activity log - admins only. See lib/audit.js for what gets recorded and why
+  // writing to it is deliberately non-blocking.
+  router.get('/admin/activity', requireRole('admin'), h(auditController.list));
+  router.get('/admin/activity/actions', requireRole('admin'), h(auditController.actions));
+  router.post('/admin/activity/prune', requireRole('admin'), h(auditController.prune));
 
   return router;
 }

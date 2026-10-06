@@ -27,6 +27,23 @@ CREATE TABLE IF NOT EXISTS users (
 -- as success, so this is safe to re-run on every boot.
 ALTER TABLE users ADD COLUMN token_version INT NOT NULL DEFAULT 0;
 
+-- Who changed what, and when. Answering "who unpublished that notice?" from a
+-- shared admin account is otherwise impossible. Written by lib/audit.js on
+-- every admin mutation; surfaced at #/activity in the admin panel.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id    INT           NULL,
+  user_email VARCHAR(190)  NOT NULL DEFAULT '',
+  action     VARCHAR(60)   NOT NULL,
+  module     VARCHAR(40)   NOT NULL DEFAULT '',
+  target     VARCHAR(255)  NOT NULL DEFAULT '',
+  meta       TEXT          NULL,
+  ip         VARCHAR(45)   NOT NULL DEFAULT '',
+  created_at TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_audit_created (created_at),
+  KEY idx_audit_action (action)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Live website copy edited in the admin (keys: home, about-head, contact).
 CREATE TABLE IF NOT EXISTS pages (
   id          INT AUTO_INCREMENT PRIMARY KEY,

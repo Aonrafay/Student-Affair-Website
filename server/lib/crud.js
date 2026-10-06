@@ -2,6 +2,7 @@
 
 const { q, qOne } = require('../config/db');
 const { uniqueSlug, parseJSON, toJSON } = require('./helpers');
+const audit = require('./audit');
 
 /**
  * Build a generic CRUD service for one module definition (see modules.js).
@@ -13,6 +14,13 @@ function buildModuleCrud(def) {
   const table = def.table || def.id;
   const jsonFields = def.jsonFields || [];
   const orderBy = def.orderBy || 'id DESC';
+
+  /** Human label for a row, used as the audit log's `target`. */
+  const describe = (d, row) => {
+    if (!row) return '';
+    const title = row[d.titleField] || row.title || row.name || row.slug || `#${row.id}`;
+    return String(title).slice(0, 255);
+  };
 
   // Immutable admin-only columns that are never written from request bodies.
   const IGNORED_ON_WRITE = new Set(['id', 'created_at', 'updated_at']);
@@ -130,34 +138,56 @@ function buildModuleCrud(def) {
       return prep(await qOne(`SELECT * FROM \`${table}\` WHERE id = ?`, [id]));
     },
 
-    async create(body) {
+    async create(req, body) {
       const data = buildWriteData({ ...body, status: body.status === 'published' ? 'published' : 'draft' });
       await ensureUniqueSlug(data);
       const result = await q(`INSERT INTO \`${table}\` SET ?`, [data]);
-      return crud.get(result.insertId);
+      const row = await crud.get(result.insertId);
+      audit.record(req, 'create', { module: def.id, target: describe(def, row) });
+      return row;
     },
 
-    async update(id, body) {
+    async update(req, id, body) {
+      const before = await crud.get(id);
       const data = buildWriteData(body);
       if (Object.keys(data).length > 0) {
         await ensureUniqueSlug(data, id);
         await q(`UPDATE \`${table}\` SET ? WHERE id = ?`, [data, id]);
       }
-      return crud.get(id);
+      const row = await crud.get(id);
+      // Only the fields that actually changed, so the log is readable.
+      const changed = Object.keys(data).filter(
+        (k) => String(before ? before[k] : '') !== String(data[k])
+      );
+      if (changed.length) {
+        audit.record(req, 'update', {
+          module: def.id,
+          target: describe(def, row),
+          meta: { fields: changed.slice(0, 20) }
+        });
+      }
+      return row;
     },
 
-    async setStatus(id, status) {
+    async setStatus(req, id, status) {
       if (status !== 'draft' && status !== 'published') {
         throw new Error('Invalid status.');
       }
       const data = { status };
       if (status === 'published') data.published_at = new Date();
       await q(`UPDATE \`${table}\` SET ? WHERE id = ?`, [data, id]);
-      return crud.get(id);
+      const row = await crud.get(id);
+      audit.record(req, status === 'published' ? 'publish' : 'unpublish', {
+        module: def.id,
+        target: describe(def, row)
+      });
+      return row;
     },
 
-    async remove(id) {
+    async remove(req, id) {
+      const before = await crud.get(id);
       await q(`DELETE FROM \`${table}\` WHERE id = ?`, [id]);
+      audit.record(req, 'delete', { module: def.id, target: describe(def, before) });
       return { ok: true };
     },
 

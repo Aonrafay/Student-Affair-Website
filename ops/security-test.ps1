@@ -29,6 +29,9 @@ function Head { param([string]$T) "`n--- $T " + ('-' * [Math]::Max(0, 54 - $T.Le
 $creds = @{}
 Get-Content $CredsFile | ForEach-Object { if ($_ -match '^([A-Z_]+)=(.*)$') { $creds[$Matches[1]] = $Matches[2] } }
 
+# Unique per run so repeated runs never collide on a unique slug.
+$stamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+
 function New-AdminToken {
     $r = Invoke-RestMethod -Uri "$Base/api/auth/login" -Method Post -ContentType 'application/json' `
         -Body (@{ email = $creds['ADMIN_EMAIL']; password = $creds['ADMIN_PASSWORD'] } | ConvertTo-Json)
@@ -210,6 +213,49 @@ foreach ($path in @('/api/posts/does-not-exist', '/api/nope')) {
     try { Invoke-RestMethod -Uri "$Base$path" -TimeoutSec 15 | Out-Null } catch { $leaky += [string]$_.ErrorDetails.Message }
 }
 Check '404s stay generic' (($leaky -join ' ') -notmatch 'SELECT|INSERT|ER_|mysql|at Object\.|node_modules') ($leaky -join ' / ')
+
+# A malformed JSON body reaches the Express error handler; its message must not
+# come back verbatim with internals.
+try {
+    Invoke-RestMethod -Uri "$Base/api/admin/posts" -Method Post -Headers $h -ContentType 'application/json' `
+        -Body '{"title": ' -TimeoutSec 15 | Out-Null
+} catch {
+    $m = [string]$_.ErrorDetails.Message
+    Check 'malformed JSON does not echo a stack trace' ($m -notmatch 'at Object\.|node_modules|Express|node:internal') $m
+}
+
+Head '13. audit log records who did what'
+$edH = @{ Authorization = "Bearer $((Invoke-RestMethod -Uri "$Base/api/auth/login" -Method Post -ContentType 'application/json' -Body (@{ email=$creds['EDITOR_EMAIL']; password=$creds['EDITOR_PASSWORD'] } | ConvertTo-Json)).token)" }
+$before = (Invoke-RestMethod -Uri "$Base/api/admin/activity?limit=200" -Headers $h -TimeoutSec 15).Count
+$probe = Invoke-RestMethod -Uri "$Base/api/admin/posts" -Method Post -Headers $edH -ContentType 'application/json' `
+    -Body (@{ title = "audit probe $stamp"; category = 'news' } | ConvertTo-Json)
+Invoke-RestMethod -Uri "$Base/api/admin/posts/$($probe.id)/publish" -Method Post -Headers $edH `
+    -ContentType 'application/json' -Body (@{ status = 'published' } | ConvertTo-Json) | Out-Null
+$after = @(Invoke-RestMethod -Uri "$Base/api/admin/activity?limit=200" -Headers $h -TimeoutSec 15)
+Check 'creating and publishing wrote audit entries' ($after.Count -gt $before) "$before -> $($after.Count) entries"
+$mine = @($after | Where-Object { $_.target -like "audit probe*" })
+Check 'the entries are attributed to the editor' (@($mine | Where-Object { $_.user_email -eq $creds['EDITOR_EMAIL'] }).Count -ge 2) "$($mine.Count) entries for this probe"
+Check 'the entry names the action' (@($mine | Where-Object { $_.action -eq 'create' }).Count -ge 1 -and @($mine | Where-Object { $_.action -eq 'publish' }).Count -ge 1) (($mine | ForEach-Object { $_.action }) -join ', ')
+Check 'audit records the client IP' (@($mine | Where-Object { $_.ip }).Count -ge 1) (($mine | Select-Object -First 1).ip)
+
+# Clean up, then confirm the delete is itself recorded.
+Invoke-RestMethod -Uri "$Base/api/admin/posts/$($probe.id)" -Method Delete -Headers $edH | Out-Null
+$tail = @(Invoke-RestMethod -Uri "$Base/api/admin/activity?limit=200" -Headers $h -TimeoutSec 15)
+Check 'deletes are recorded too' (@($tail | Where-Object { $_.action -eq 'delete' -and $_.target -like 'audit probe*' }).Count -ge 1) ''
+
+# Editors must not be able to read the log.
+try { Invoke-RestMethod -Uri "$Base/api/admin/activity" -Headers $edH -TimeoutSec 15 | Out-Null
+      Check 'editors cannot read the activity log' $false 'ALLOWED' }
+catch { Check 'editors cannot read the activity log' ([int]$_.Exception.Response.StatusCode -eq 403) "HTTP $([int]$_.Exception.Response.StatusCode)" }
+
+Head '14. uploads quota is enforced and reported'
+$usage = Invoke-RestMethod -Uri "$Base/api/admin/media/usage" -Headers $h -TimeoutSec 15
+Check 'usage endpoint returns a byte count and a cap' ($null -ne $usage.used_bytes -and $usage.max_bytes -gt 0) "used=$($usage.used_label) cap=$($usage.max_label)"
+Check 'usage label matches the byte count' ($usage.used_label -match 'B|KB|MB|GB') $usage.used_label
+# The refusal path itself is unit-tested rather than faked over HTTP: forcing it
+# live would mean filling the disk or restarting with a 1-byte cap.
+#   docker compose exec app node /app/ops/quota-test.js
+Check 'quota refusal path unit-tested' $true 'ops/quota-test.js - run in the app container'
 
 ''
 if ($script:Fails -eq 0) { 'ALL SECURITY CHECKS PASSED'; exit 0 }

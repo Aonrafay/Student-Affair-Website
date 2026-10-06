@@ -175,6 +175,7 @@
     if (head === 'pages') return user.role === 'admin' ? pagePages() : noAccess();
     if (head === 'settings') return user.role === 'admin' ? pageSettings() : noAccess();
     if (head === 'users') return user.role === 'admin' ? pageUsers() : noAccess();
+    if (head === 'activity') return user.role === 'admin' ? pageActivity() : noAccess();
     return pageDashboard();
   }
 
@@ -1546,6 +1547,75 @@
       });
     });
   });
+
+  // ---------------------------------------------------------------- activity --
+  // Who changed what. Every admin mutation writes a row (server/lib/audit.js),
+  // which is the only way to answer "who unpublished that?" when the whole
+  // office shares one admin login.
+  var ACTION_LABEL = {
+    create: 'Created', update: 'Edited', delete: 'Deleted',
+    publish: 'Published', unpublish: 'Unpublished',
+    'media.upload': 'Uploaded media', 'media.delete': 'Deleted media',
+    'user.create': 'Created user', 'user.update': 'Edited user', 'user.delete': 'Deleted user',
+    'page.update': 'Edited site copy', 'settings.update': 'Changed settings'
+  };
+
+  function pageActivity() {
+    var el = view();
+    el.innerHTML =
+      '<div class="page-head"><h1>&#128203; Activity</h1>' +
+        '<div class="head-actions"><button class="btn ghost tiny" id="activity-refresh">Refresh</button></div></div>' +
+      '<p class="muted-note">Every create, edit, publish, delete, upload and user change, ' +
+      'recorded with who did it. Retained for 180 days.</p>' +
+      '<div id="activity-body"><div class="state"><div class="spinner"></div><p>Loading…</p></div></div>';
+
+    function load() {
+      var body = document.getElementById('activity-body');
+      stateLoad(body, 'Loading activity…');
+      A.api('/admin/activity?limit=200').then(function (rows) {
+        if (!rows.length) {
+          return stateEmpty(body, 'Nothing recorded yet. Actions appear here as staff make changes.');
+        }
+        var html = '<div class="table-wrap"><table class="list-table"><thead><tr>' +
+          '<th>When</th><th>Who</th><th>Action</th><th>Item</th><th>Details</th>' +
+          '</tr></thead><tbody>';
+        rows.forEach(function (r) {
+          var label = ACTION_LABEL[r.action] || r.action;
+          var detail = '';
+          if (r.meta) {
+            var bits = [];
+            if (r.meta.fields) bits.push('fields: ' + r.meta.fields.join(', '));
+            if (r.meta.changed) bits.push('changed: ' + r.meta.changed.join(', '));
+            if (r.meta.bytes !== undefined) bits.push(Math.round(r.meta.bytes / 1024) + ' KB');
+            if (r.meta.role) bits.push('role: ' + r.meta.role);
+            if (r.meta.sessions_revoked) bits.push('sessions revoked');
+            if (r.meta.keys) bits.push(r.meta.keys.join(', '));
+            detail = bits.join(' · ');
+          }
+          var cls = r.action === 'delete' || r.action === 'user.delete' ? 'badge warn'
+                  : (r.action === 'publish' ? 'badge ok' : 'badge');
+          html += '<tr>' +
+            '<td>' + esc(fmtWhen(r.created_at)) + '</td>' +
+            '<td>' + esc(r.user_email || 'system') + '</td>' +
+            '<td><span class="' + cls + '">' + esc(label) + '</span></td>' +
+            '<td>' + esc(r.target || '') + (r.module ? ' <span class="muted-note">(' + esc(r.module) + ')</span>' : '') + '</td>' +
+            '<td class="muted-note">' + esc(detail) + '</td>' +
+            '</tr>';
+        });
+        body.innerHTML = html + '</tbody></table></div>';
+      }).catch(function (err) { stateError(body, err); });
+    }
+
+    document.getElementById('activity-refresh').addEventListener('click', load);
+    load();
+  }
+
+  /** UTC timestamps come back as "YYYY-MM-DD HH:MM:SS". */
+  function fmtWhen(value) {
+    if (!value) return '';
+    var s = String(value).replace('T', ' ').replace('Z', '');
+    return s.slice(0, 16);
+  }
 
   renderShell();
   window.addEventListener('hashchange', route);

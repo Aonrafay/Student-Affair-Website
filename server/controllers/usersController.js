@@ -2,6 +2,7 @@
 
 const bcrypt = require('bcryptjs');
 const { q, qOne } = require('../config/db');
+const audit = require('../lib/audit');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -40,6 +41,11 @@ async function createUser(req, res) {
     ]
   );
   const user = await qOne('SELECT id, name, email, role, created_at FROM users WHERE id = ?', [result.insertId]);
+  audit.record(req, 'user.create', {
+    module: 'users',
+    target: user.email,
+    meta: { role: user.role }
+  });
   return res.status(201).json(user);
 }
 
@@ -87,6 +93,21 @@ async function updateUser(req, res) {
   }
 
   const updated = await qOne('SELECT id, name, email, role, created_at FROM users WHERE id = ?', [id]);
+  // Password and role changes are the security-relevant ones, and they also
+  // bump token_version (see the UPDATE above) - worth spelling out in the log.
+  const notable = ['password_hash', 'role', 'email'].filter((k) => data[k] !== undefined);
+  if (notable.length) {
+    audit.record(req, 'user.update', {
+      module: 'users',
+      target: updated.email,
+      meta: {
+        changed: notable.map((k) => (k === 'password_hash' ? 'password' : k)),
+        // Never log the new role value for password changes; the field list is
+        // enough to answer "did someone reset this account?".
+        sessions_revoked: data.token_version !== undefined
+      }
+    });
+  }
   return res.json(updated);
 }
 
@@ -106,6 +127,7 @@ async function deleteUser(req, res) {
     }
   }
   await q('DELETE FROM users WHERE id = ?', [id]);
+  audit.record(req, 'user.delete', { module: 'users', target: user.email, meta: { role: user.role } });
   return res.json({ ok: true });
 }
 

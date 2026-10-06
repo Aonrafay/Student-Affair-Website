@@ -109,9 +109,24 @@ app.use((req, res) => {
 });
 
 // API errors become JSON instead of Express' HTML error pages.
+//
+// The client only ever sees a generic message. `err.message` is logged
+// server-side instead of returned, because a raw driver error can quote the
+// failing SQL, table and column names - free reconnaissance for anyone probing
+// the API, and no help to a CMS user. An error that was raised deliberately as
+// a validation message (res.status(...).json({error}) elsewhere in the app)
+// still reaches the client directly and is unaffected.
 app.use((err, req, res, next) => {
-  if (err && req.originalUrl && req.originalUrl.startsWith(BASE_PATH + '/api')) {
-    return res.status(err.status || 500).json({ error: err.message || 'Server error.' });
+  const isApi = err && req.originalUrl && req.originalUrl.startsWith(BASE_PATH + '/api');
+  if (!err) return next();
+  const status = err.status || 500;
+  if (status >= 500) {
+    console.error(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} -> ${status}`,
+      err && err.stack ? err.stack : err);
+  }
+  if (isApi) {
+    const message = status < 500 ? (err.message || 'Request failed.') : 'Server error.';
+    return res.status(status).json({ error: message });
   }
   res.status(500).send('Server error.');
 });
