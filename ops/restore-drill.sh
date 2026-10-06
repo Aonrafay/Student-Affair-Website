@@ -21,7 +21,23 @@ ROOTPW="$(grep -E '^MYSQL_ROOT_PASSWORD=' .env | head -n1 | cut -d= -f2-)"
 [ -n "$DBP" ] || { echo "DB_PASSWORD missing from .env" >&2; exit 1; }
 [ -n "$ROOTPW" ] || { echo "MYSQL_ROOT_PASSWORD missing from .env" >&2; exit 1; }
 
-DUMP="${1:-$(ls -1t "$BASE"/backups/db/*.sql.gz | head -1)}"
+DIR_DAILY="$BASE/backups/db/daily"
+DIR_WEEKLY="$BASE/backups/db/weekly"
+DIR_MEDIA="$BASE/backups/media"
+DIR_ENV="$BASE/backups/env"
+
+# Newest dump across both retention buckets, with a fallback to the
+# pre-restructure flat path so an older layout still drills cleanly.
+newest_dump() {
+  local f
+  f="$(ls -1t "$DIR_DAILY"/*.sql.gz "$DIR_WEEKLY"/*.sql.gz 2>/dev/null | head -1)"
+  [ -n "$f" ] || f="$(ls -1t "$BASE"/backups/db/*.sql.gz 2>/dev/null | head -1)"
+  [ -n "$f" ] || return 1
+  printf '%s\n' "$f"
+}
+
+DUMP="${1:-$(newest_dump || true)}"
+[ -n "$DUMP" ] || { echo "no dumps found under $DIR_DAILY or $DIR_WEEKLY" >&2; exit 1; }
 [ -f "$DUMP" ] || { echo "no dump found: $DUMP" >&2; exit 1; }
 
 # The app user `sa` is granted only on student_affairs, so the drill needs root
@@ -66,7 +82,8 @@ done
 # content: the CMS will render a dead image. Cross-check every media row in the
 # RESTORED copy against the uploads archive taken at the same timestamp.
 STAMP="$(basename "$DUMP" .sql.gz)"
-ARCHIVE="$BASE/backups/uploads/$STAMP.tgz"
+ARCHIVE="$DIR_MEDIA/$STAMP.tgz"
+[ -f "$ARCHIVE" ] || ARCHIVE="$BASE/backups/uploads/$STAMP.tgz"   # legacy layout
 media_checked=0
 media_missing=0
 if [ -f "$ARCHIVE" ]; then
@@ -94,7 +111,8 @@ fi
 
 # The dump alone is not enough: the .env carries the admin passwords and the
 # signing key, so a restore without it locks everyone out of the admin.
-env_backup="$(ls -1t "$BASE"/backups/env/*.env 2>/dev/null | head -1 || true)"
+env_backup="$DIR_ENV/current.env"
+[ -f "$env_backup" ] || env_backup="$(ls -1t "$DIR_ENV"/*.env "$BASE"/backups/env/*.env 2>/dev/null | head -1 || true)"
 if [ -n "$env_backup" ] && [ -s "$env_backup" ]; then
   log "secrets backup present: $env_backup ($(stat -c '%a' "$env_backup") mode)"
 else

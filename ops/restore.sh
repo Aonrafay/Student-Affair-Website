@@ -37,15 +37,33 @@ DBP="$(grep -E '^DB_PASSWORD=' .env | head -n1 | cut -d= -f2-)"
 ROOTPW="$(grep -E '^MYSQL_ROOT_PASSWORD=' .env | head -n1 | cut -d= -f2-)"
 [ -n "$ROOTPW" ] || die "MYSQL_ROOT_PASSWORD missing from .env"
 
+BACKUPS="$BASE/backups"
+DIR_DAILY="$BACKUPS/db/daily"
+DIR_WEEKLY="$BACKUPS/db/weekly"
+DIR_MEDIA="$BACKUPS/media"
+DIR_ENV="$BACKUPS/env"
+
 if [ -z "$STAMP" ]; then
-  STAMP="$(basename "$(ls -1t "$BASE"/backups/db/*.sql.gz | head -1)" .sql.gz)"
+  # Newest dump across both retention buckets.
+  STAMP="$(ls -1t "$DIR_DAILY"/*.sql.gz "$DIR_WEEKLY"/*.sql.gz 2>/dev/null | head -1 | xargs basename 2>/dev/null | sed 's/\.sql\.gz$//')"
+  [ -n "$STAMP" ] || die "no dumps found under $DIR_DAILY or $DIR_WEEKLY"
 fi
 
-DUMP="$BASE/backups/db/$STAMP.sql.gz"
-ARCHIVE="$BASE/backups/uploads/$STAMP.tgz"
-ENVBAK="$BASE/backups/env/$STAMP.env"
-[ -f "$DUMP" ] || die "no such dump: $DUMP"
-[ "$DB_ONLY" -eq 1 ] || { [ -f "$ARCHIVE" ] || die "no uploads archive for $STAMP (use --db-only to skip media)"; }
+# Fall back to the other bucket, and to the pre-restructure flat path, so an
+# older backup layout on disk is still recoverable.
+DUMP="$DIR_DAILY/$STAMP.sql.gz"
+[ -f "$DUMP" ] || DUMP="$DIR_WEEKLY/$STAMP.sql.gz"
+[ -f "$DUMP" ] || DUMP="$BACKUPS/db/$STAMP.sql.gz"
+[ -f "$DUMP" ] || die "no such dump for '$STAMP' (looked in $DIR_DAILY, $DIR_WEEKLY and the legacy $BACKUPS/db)"
+
+ARCHIVE="$DIR_MEDIA/$STAMP.tgz"
+[ -f "$ARCHIVE" ] || ARCHIVE="$BACKUPS/uploads/$STAMP.tgz"
+# .env is a single "current" snapshot now, not one per run.
+ENVBAK="$DIR_ENV/current.env"
+[ -f "$ENVBAK" ] || ENVBAK="$DIR_ENV/$STAMP.env"
+[ -f "$ENVBAK" ] || ENVBAK="$BACKUPS/env/$STAMP.env"
+
+[ "$DB_ONLY" -eq 1 ] || { [ -f "$ARCHIVE" ] || die "no media archive for $STAMP (use --db-only to skip media)"; }
 
 mysql_root() { docker compose exec -T -e MYSQL_PWD="$ROOTPW" db mysql -uroot -N -B "$@"; }
 
