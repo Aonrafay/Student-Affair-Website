@@ -40,6 +40,8 @@ function buildApiRouter() {
   // failures count, so normal use never trips it.
   router.post('/auth/login', loginLimiter(), h(authController.login));
   router.get('/auth/me', protect, h(authController.me));
+  // Invalidates every session for the caller, including its own.
+  router.post('/auth/logout-all', protect, h(authController.logoutAll));
 
   // --- Public: site copy + settings ---------------------------------------------
   router.get('/settings', h(contentController.getPublicSettings));

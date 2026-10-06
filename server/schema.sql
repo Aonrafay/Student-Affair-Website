@@ -14,8 +14,18 @@ CREATE TABLE IF NOT EXISTS users (
   email         VARCHAR(190)  NOT NULL UNIQUE,
   password_hash VARCHAR(255)  NOT NULL,
   role          ENUM('admin','editor') NOT NULL DEFAULT 'editor',
+  -- Bumped to invalidate every JWT already issued for this user. Compared on
+  -- each request by middleware/authMiddleware.js, which is what makes a
+  -- session revocable: without it, "sign out" only clears localStorage and a
+  -- stolen token stays valid until it expires.
+  token_version INT           NOT NULL DEFAULT 0,
   created_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Existing installations predate token_version. MySQL has no
+-- "ADD COLUMN IF NOT EXISTS", but migrate.js treats ER_DUP_FIELDNAME (1060)
+-- as success, so this is safe to re-run on every boot.
+ALTER TABLE users ADD COLUMN token_version INT NOT NULL DEFAULT 0;
 
 -- Live website copy edited in the admin (keys: home, about-head, contact).
 CREATE TABLE IF NOT EXISTS pages (

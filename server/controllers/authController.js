@@ -1,7 +1,7 @@
 'use strict';
 
 const bcrypt = require('bcryptjs');
-const { qOne } = require('../config/db');
+const { q, qOne } = require('../config/db');
 const { sign } = require('../middleware/auth');
 const rateLimit = require('../middleware/rateLimit');
 
@@ -43,7 +43,21 @@ async function login(req, res) {
 
   rateLimit.recordSuccess(req, key);
   const publicUser = { id: user.id, name: user.name, email: user.email, role: user.role };
-  return res.json({ token: sign(publicUser), user: publicUser });
+  // token_version rides along so the JWT can be checked against the current
+  // value on every request (see middleware/authMiddleware.js).
+  return res.json({
+    token: sign({ ...publicUser, token_version: user.token_version }),
+    user: publicUser
+  });
+}
+
+/**
+ * Invalidate every session for the signed-in user by bumping token_version.
+ * The caller's own token dies too, so the UI redirects to login afterwards.
+ */
+async function logoutAll(req, res) {
+  await q('UPDATE users SET token_version = token_version + 1 WHERE id = ?', [req.user.id]);
+  return res.json({ ok: true });
 }
 
 async function me(req, res) {
@@ -52,4 +66,4 @@ async function me(req, res) {
   });
 }
 
-module.exports = { login, me };
+module.exports = { login, me, logoutAll };

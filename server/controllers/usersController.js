@@ -77,6 +77,12 @@ async function updateUser(req, res) {
   }
 
   if (Object.keys(data).length > 0) {
+    // Changing a password or a role must invalidate that user's existing
+    // sessions: a token issued before the change is no longer trustworthy.
+    // Bumping token_version is the same mechanism as "sign out everywhere".
+    if (data.password_hash !== undefined || data.role !== undefined) {
+      data.token_version = Number(user.token_version || 0) + 1;
+    }
     await q('UPDATE users SET ? WHERE id = ?', [data, id]);
   }
 

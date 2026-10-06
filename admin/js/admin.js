@@ -1527,6 +1527,26 @@
     location.href = A.loginUrl();
   });
 
+  // "Sign out everywhere": the plain Sign out button only clears this browser's
+  // localStorage, so a token copied out of it keeps working until it expires.
+  // This bumps the account's token_version on the server, which retires every
+  // token issued so far - including this one, hence the redirect afterwards.
+  document.getElementById('signout-all').addEventListener('click', function () {
+    confirmDialog(
+      'Sign out everywhere?',
+      'Every browser currently signed in as this account will be signed out, including this one. Use this if you think someone else has your session.',
+      'Sign out everywhere'
+    ).then(function (ok) {
+      if (!ok) return;
+      A.api('/auth/logout-all', { method: 'POST' }).then(function () {
+        A.clearSession();
+        location.href = A.loginUrl();
+      }).catch(function (err) {
+        toast(err.message, 'error');
+      });
+    });
+  });
+
   renderShell();
   window.addEventListener('hashchange', route);
   route();

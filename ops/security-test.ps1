@@ -180,7 +180,31 @@ try {
 # Lockout is per email+IP pair, so one account being locked must not lock others.
 Check 'a real admin login still works while another pair is locked' ([bool](New-AdminToken)) 'admin unaffected by the other account''s failures'
 
-Head '11. error messages do not leak internals'
+Head '11. sessions are revocable and time-bounded'
+function JwtPayload { param([string]$T) $p = $T.Split('.')[1].Replace('-','+').Replace('_','/'); switch ($p.Length % 4) { 2 { $p += '==' } 3 { $p += '=' } }; [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($p)) | ConvertFrom-Json }
+
+# Use the editor account: revoking it must not disturb the admin session this
+# script is relying on.
+$edTok = $editor.token
+$pl = JwtPayload $edTok
+Check 'JWT carries a token_version claim' ($null -ne $pl.tv) "tv=$($pl.tv)"
+$hours = [Math]::Round(($pl.exp - $pl.iat) / 3600, 1)
+Check 'session lifetime is 8h, not 7d' ($hours -le 8.5 -and $hours -ge 7.5) "$hours hours"
+Check 'JWT does not leak the password hash' ($edTok -notmatch 'password') ''
+
+try { Invoke-RestMethod -Uri "$Base/api/auth/logout-all" -Method Post -Headers @{ Authorization = "Bearer $edTok" } -TimeoutSec 15 | Out-Null
+      Check 'logout-all endpoint works' $true } catch { Check 'logout-all endpoint works' $false "HTTP $([int]$_.Exception.Response.StatusCode)" }
+
+try { Invoke-RestMethod -Uri "$Base/api/auth/me" -Headers @{ Authorization = "Bearer $edTok" } -TimeoutSec 15 | Out-Null
+      Check 'revoked token is rejected afterwards' $false 'STILL VALID - revocation is broken' }
+catch { Check 'revoked token is rejected afterwards' ([int]$_.Exception.Response.StatusCode -eq 401) "HTTP $([int]$_.Exception.Response.StatusCode)" }
+
+$fresh = Invoke-RestMethod -Uri "$Base/api/auth/login" -Method Post -ContentType 'application/json' `
+    -Body (@{ email = $creds['EDITOR_EMAIL']; password = $creds['EDITOR_PASSWORD'] } | ConvertTo-Json)
+Check 'signing in again after revocation works' ([bool]$fresh.token) "new tv=$((JwtPayload $fresh.token).tv)"
+Check 'the admin session survived the editor revocation' ([bool](New-AdminToken)) 'admin token still valid'
+
+Head '12. error messages do not leak internals'
 $leaky = @()
 foreach ($path in @('/api/posts/does-not-exist', '/api/nope')) {
     try { Invoke-RestMethod -Uri "$Base$path" -TimeoutSec 15 | Out-Null } catch { $leaky += [string]$_.ErrorDetails.Message }

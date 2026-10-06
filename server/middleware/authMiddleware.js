@@ -6,6 +6,11 @@ const { qOne } = require('../config/db');
 /**
  * Require a valid `Authorization: Bearer <token>` header.
  * Sets `req.user` to the fresh user row (id, name, email, role).
+ *
+ * The token_version check is what makes sessions revocable: a token signed
+ * before the user's token_version was bumped is rejected even though its
+ * signature and expiry are still valid. Without it a leaked token could not be
+ * withdrawn until it expired.
  */
 async function protect(req, res, next) {
   const header = req.headers.authorization || '';
@@ -16,11 +21,18 @@ async function protect(req, res, next) {
   try {
     const payload = verify(token);
     const user = await qOne(
-      'SELECT id, name, email, role, created_at FROM users WHERE id = ?',
+      'SELECT id, name, email, role, token_version, created_at FROM users WHERE id = ?',
       [payload.id]
     );
     if (!user) {
       return res.status(401).json({ error: 'Account no longer exists.' });
+    }
+    // A token issued before the last revocation attempt is no longer valid.
+    // `|| 0` keeps tokens minted before this column existed working.
+    if (Number(payload.tv || 0) !== Number(user.token_version || 0)) {
+      return res.status(401).json({
+        error: 'This session has been signed out. Please sign in again.'
+      });
     }
     req.user = user;
     next();
