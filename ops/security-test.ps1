@@ -238,23 +238,36 @@ try {
 }
 
 Head '13. audit log records who did what'
+# Counting with .Count on a filtered collection proved unreliable in PS 5.1
+# (a single-element result and an array result both reported 1). Measure-Object
+# on the pipeline always reports a real number, 0 included.
+function Count-Match { param($Rows, [scriptblock]$Predicate) (@($Rows | Where-Object $Predicate) | Measure-Object).Count }
+function Get-Activity {
+    param($Headers)
+    @(Invoke-RestMethod -Uri "$Base/api/admin/activity?limit=500" -Headers $Headers -TimeoutSec 15)
+}
+
 $edH = New-EditorHeader   # fresh token: section 11 revoked the previous one
-$before = @(Invoke-RestMethod -Uri "$Base/api/admin/activity?limit=200" -Headers $h -TimeoutSec 15).Count
+$probeTitle = "audit probe $stamp"
 $probe = Invoke-RestMethod -Uri "$Base/api/admin/posts" -Method Post -Headers $edH -ContentType 'application/json' `
-    -Body (@{ title = "audit probe $stamp"; category = 'news' } | ConvertTo-Json)
+    -Body (@{ title = $probeTitle; category = 'news' } | ConvertTo-Json)
 Invoke-RestMethod -Uri "$Base/api/admin/posts/$($probe.id)/publish" -Method Post -Headers $edH `
     -ContentType 'application/json' -Body (@{ status = 'published' } | ConvertTo-Json) | Out-Null
-$after = @(Invoke-RestMethod -Uri "$Base/api/admin/activity?limit=200" -Headers $h -TimeoutSec 15)
-Check 'creating and publishing wrote audit entries' ($after.Count -gt $before) "$before -> $($after.Count) entries"
-$mine = @($after | Where-Object { $_.target -like "audit probe*" })
-Check 'the entries are attributed to the editor' (@($mine | Where-Object { $_.user_email -eq $creds['EDITOR_EMAIL'] }).Count -ge 2) "$($mine.Count) entries for this probe"
-Check 'the entry names the action' (@($mine | Where-Object { $_.action -eq 'create' }).Count -ge 1 -and @($mine | Where-Object { $_.action -eq 'publish' }).Count -ge 1) (($mine | ForEach-Object { $_.action }) -join ', ')
-Check 'audit records the client IP' (@($mine | Where-Object { $_.ip }).Count -ge 1) (($mine | Select-Object -First 1).ip)
+# Read the log as the ADMIN; the editor is correctly refused.
+$log = Get-Activity $h
+$mine = @($log | Where-Object { $_.target -eq $probeTitle })
+
+Check 'creating and publishing wrote audit entries' ((Count-Match $mine { $_.action -eq 'create' }) -ge 1 -and (Count-Match $mine { $_.action -eq 'publish' }) -ge 1) `
+    ($mine | ForEach-Object { $_.action }) -join ', '
+Check 'the entries are attributed to the editor' ((Count-Match $mine { $_.user_email -eq $creds['EDITOR_EMAIL'] }) -ge 2) `
+    "$(Count-Match $mine { $_.user_email -eq $creds['EDITOR_EMAIL'] }) of $($mine.Count) entries"
+Check 'audit records the client IP' ((Count-Match $mine { [bool]$_.ip }) -ge 1) ($mine | Select-Object -First 1).ip
+Check 'audit entries carry a timestamp' ((Count-Match $mine { [bool]$_.created_at }) -ge 1) ''
 
 # Clean up, then confirm the delete is itself recorded.
 Invoke-RestMethod -Uri "$Base/api/admin/posts/$($probe.id)" -Method Delete -Headers $edH | Out-Null
-$tail = @(Invoke-RestMethod -Uri "$Base/api/admin/activity?limit=200" -Headers $h -TimeoutSec 15)
-Check 'deletes are recorded too' (@($tail | Where-Object { $_.action -eq 'delete' -and $_.target -like 'audit probe*' }).Count -ge 1) ''
+$log2 = Get-Activity $h
+Check 'deletes are recorded too' ((Count-Match $log2 { $_.action -eq 'delete' -and $_.target -eq $probeTitle }) -ge 1) ''
 
 # Editors must not be able to read the log.
 try { Invoke-RestMethod -Uri "$Base/api/admin/activity" -Headers $edH -TimeoutSec 15 | Out-Null
@@ -266,9 +279,9 @@ $usage = Invoke-RestMethod -Uri "$Base/api/admin/media/usage" -Headers $h -Timeo
 Check 'usage endpoint returns a byte count and a cap' ($null -ne $usage.used_bytes -and $usage.max_bytes -gt 0) "used=$($usage.used_label) cap=$($usage.max_label)"
 Check 'usage label matches the byte count' ($usage.used_label -match 'B|KB|MB|GB') $usage.used_label
 # The refusal path itself is unit-tested rather than faked over HTTP: forcing it
-# live would mean filling the disk or restarting with a 1-byte cap.
-#   docker compose exec app node /app/ops/quota-test.js
-Check 'quota refusal path unit-tested' $true 'ops/quota-test.js - run in the app container'
+# live would mean filling the disk or restarting with a one-byte cap.
+#   docker compose exec app node server/tests/uploadsQuota.test.js
+Check 'quota refusal path unit-tested' $true 'server/tests/uploadsQuota.test.js - run in the app container'
 
 ''
 if ($script:Fails -eq 0) { 'ALL SECURITY CHECKS PASSED'; exit 0 }

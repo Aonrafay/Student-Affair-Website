@@ -8,14 +8,14 @@
  * the app with a one-byte cap. This drives assertRoom() directly against a
  * temp directory instead.
  *
- *   node ops/quota-test.js            (run inside the app container, or locally)
+ *   node server/tests/uploadsQuota.test.js            (run inside the app container, or locally)
  */
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const quota = require('../server/lib/uploadsQuota');
+const quota = require('../lib/uploadsQuota');
 
 let fails = 0;
 function check(name, ok, detail) {
