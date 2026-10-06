@@ -6,12 +6,15 @@ const multer = require('multer');
 const { q, qOne } = require('../config/db');
 const paths = require('../config/paths');
 
+// SVG is deliberately NOT allowed. An SVG is an XML document that can carry
+// <script>, and uploads are served from the same origin as the admin panel by
+// express.static - so an SVG would be stored XSS that can read the admin JWT
+// out of localStorage. Use PNG or WebP for logos instead.
 const ALLOWED_TYPES = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
   'image/gif': '.gif',
   'image/webp': '.webp',
-  'image/svg+xml': '.svg',
   'application/pdf': '.pdf'
 };
 
@@ -33,7 +36,7 @@ const upload = multer({
   limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter(req, file, cb) {
     if (ALLOWED_TYPES[file.mimetype]) return cb(null, true);
-    cb(new Error('Only images (jpg, png, gif, webp, svg) and PDF files are allowed.'));
+    cb(new Error('Only images (jpg, png, gif, webp) and PDF files are allowed.'));
   }
 }).single('file');
 

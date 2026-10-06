@@ -1084,9 +1084,9 @@
   // ------------------------------------------------------------------ media --
   function uploadFormHtml(compact) {
     return '<div class="upload-box' + (compact ? ' compact' : '') + '">' +
-      '<input type="file" id="upload-input" accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,application/pdf">' +
+      '<input type="file" id="upload-input" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf">' +
       '<button type="button" class="btn" id="upload-btn">Upload file</button>' +
-      '<span class="upload-hint">Images (jpg, png, gif, webp, svg) or PDF, up to 15&nbsp;MB.</span>' +
+      '<span class="upload-hint">Images (jpg, png, gif, webp) or PDF, up to 15&nbsp;MB. SVG is not accepted &mdash; use PNG or WebP.</span>' +
       '<div class="field-error" id="upload-error"></div>' +
     '</div>';
   }
