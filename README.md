@@ -109,16 +109,15 @@ Then from any machine on the LAN:
 
 - **Auto-start on boot** — `restart: unless-stopped` in `docker-compose.yml` brings the stack back
   after a VM reboot (Docker starts by default).
-- **Update after code changes** — `git pull && docker compose up -d --build`. MySQL data and
-  uploaded media live in the named volumes `db_data` / `uploads_data`, so rebuilds don't lose them.
-- **Backups** — never hardcode the password; read it from `.env`:
-  ```bash
-  DB_PASSWORD=$(grep -E '^DB_PASSWORD=' .env | cut -d= -f2-)
-  docker compose exec -T db sh -c "exec mysqldump -usa -p'$DB_PASSWORD' \
-      --single-transaction --routines --triggers student_affairs" | gzip -9 > backup.sql.gz
-  docker compose exec -T app tar czf - -C /app uploads > uploads.tgz
-  ```
-  `--single-transaction` keeps the dump consistent without locking the site out.
+- **Update after code changes** — `bash /opt/student-affairs/deploy.sh` (or `git pull &&
+  docker compose up -d --build`). MySQL data and uploaded media live in the named
+  volumes `db_data` / `uploads_data`, so rebuilds don't lose them.
+- **Backups** — use `ops/backup.sh` rather than doing it by hand. It captures the
+  database *and* the uploaded media (images are on disk, not in MySQL, so a dump
+  alone leaves every picture broken), archives the binary logs that allow restoring
+  to a specific minute, checksums everything, prunes to a retention window, and
+  refuses to run if there isn't enough free disk. Schedule and restore commands:
+  see `ops/RUNBOOK.md` §4–5.
 - **Port 80 instead of 5000** (optional) — change the compose port mapping to `"80:5000"`, or put
   nginx on the VM using the proxy block below. When university IT mounts the app under the real
   domain nothing else changes — `BASE_PATH=/student-affairs` already matches.
@@ -127,8 +126,36 @@ Then from any machine on the LAN:
 > **Security:** change every secret in `.env` on the VM before exposing the app — especially
 > `ADMIN_PASSWORD`, since the dev defaults are public in git history.
 
----
+### Operations toolkit (`ops/`)
 
+The deployment on `10.116.233.254` is run from `ops/`. **`ops/RUNBOOK.md` is the
+document to read** — topology, daily commands, backups, restores, credentials.
+
+| Script | Runs on | Purpose |
+|---|---|---|
+| `base-setup.sh` | VM (sudo) | Docker, packages, ufw. Idempotent |
+| `install-mysqlbinlog.sh` | VM (sudo) | Adds the client `mysqlbinlog` for point-in-time restore |
+| `prepare-dirs.sh` | VM (sudo) | Creates `/opt/student-affairs` |
+| `deploy.sh` | VM | `git pull` + rebuild + migrate/seed + health wait. Never regenerates `.env` |
+| `backup.sh` | VM | Dump + binary logs + media + `.env`, checksummed, with retention and a free-space guard |
+| `install-cron.sh` | VM | Nightly 02:15, weekly Sunday 03:15 (Asia/Karachi) |
+| `restore.sh` | VM | Restore the newest or a named full dump |
+| `restore-to-time.sh` | VM | Restore to **any minute** in the last 14 days, by replaying binary logs |
+| `restore-drill.sh` | VM | Proves a backup restores, without touching live data |
+| `pitr-test.sh` | VM | Proves point-in-time recovery works in both directions |
+| `pull-backups.ps1` | your PC | Pulls backups off the VM, verifies every checksum |
+| `register-backup-task.ps1` | your PC | Scheduled Task: daily 09:00 + at log on |
+| `vm-sudo.ps1` | your PC | Runs a script on the VM under `sudo` with no TTY |
+| `smoke-test.ps1` | your PC | End-to-end over HTTP: login, draft, publish, media |
+| `security-test.ps1` | your PC | ~60 assertions over real HTTP against the live site |
+
+Backups are made by cron, not by the web app: the container has no `mysqldump`,
+and the admin **Backup & download** page can list and download what already
+exists but never creates or deletes one. The backups directory is mounted
+read-only, and `env/current.env` (`JWT_SECRET` plus every password) is
+deliberately not downloadable.
+
+---
 
 ---
 
@@ -420,8 +447,16 @@ validation — inline messages instead).
 │   ├── css/admin.css
 │   ├── js/vendor/marked.min.js # Markdown editor preview
 │   └── js/{auth,modules,admin,login}.js
-└── uploads/                    # media files (git-ignored)
+├── uploads/                    # media files (git-ignored)
+├── ops/                        # deployment, backup, restore and test scripts
+│                                # (see ops/RUNBOOK.md)
+└── server/tests/               # unit tests run inside the app container
 ```
+
+**On the VM, `uploads/` is not where media lives.** It is a Docker volume
+(`app_uploads_data`) mounted at `/app/uploads`; the host folder only ever holds
+`.gitkeep`. Same for the database — it is in `app_db_data`, not in any file you
+can read. That is why the backup script captures both.
 
 ---
 
