@@ -16,8 +16,11 @@ const BASE_PATH = (process.env.BASE_PATH || '/student-affairs').replace(/\/+$/, 
 const app = express();
 app.disable('x-powered-by');
 // Security headers go on before anything that can produce a response, so the
-// static mounts, the API and the HTML renderer are all covered.
+// static mounts, the API and the HTML renderer are all covered. `csp` must run
+// before the HTML routes: it stashes the per-request nonce on req, which
+// renderHtml() substitutes into __CSP_NONCE__.
 app.use(security.baseline);
+app.use(security.csp);
 app.use(express.json({ limit: '2mb' }));
 
 // ============================================================================
@@ -59,9 +62,13 @@ const readHtml = (file) => {
   return htmlCache.get(file);
 };
 
-// Every HTML file may use __BASE_PATH__ tokens for asset URLs; they are
-// replaced at serve time so changing BASE_PATH needs no code changes.
-const renderHtml = (file) => readHtml(file).replace(/__BASE_PATH__/g, BASE_PATH);
+// Every HTML file may use __BASE_PATH__ tokens for asset URLs and
+// __CSP_NONCE__ on inline <script> tags; both are replaced at serve time, so
+// changing BASE_PATH or tightening the CSP needs no code changes. The nonce is
+// per-request, so the cached copy stays a template.
+const renderHtml = (req, file) => readHtml(file)
+  .replace(/__BASE_PATH__/g, BASE_PATH)
+  .replace(/__CSP_NONCE__/g, req.cspNonce || '');
 
 /** Route map: public path → HTML file (public/ or admin/ relative to root). */
 const htmlRoutes = {
@@ -84,7 +91,7 @@ const htmlRoutes = {
 
 for (const [route, file] of Object.entries(htmlRoutes)) {
   app.get(BASE_PATH + route, (req, res) => {
-    res.type('html').send(renderHtml(path.join(__dirname, '..', file)));
+    res.type('html').send(renderHtml(req, path.join(__dirname, '..', file)));
   });
 }
 
@@ -98,7 +105,7 @@ app.use((req, res) => {
   if (req.originalUrl.startsWith(BASE_PATH + '/api')) {
     return res.status(404).json({ error: 'Not found.' });
   }
-  res.status(404).type('html').send(renderHtml(path.join(paths.public, '404.html')));
+  res.status(404).type('html').send(renderHtml(req, path.join(paths.public, '404.html')));
 });
 
 // API errors become JSON instead of Express' HTML error pages.
