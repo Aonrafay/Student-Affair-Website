@@ -8,6 +8,7 @@ const contentController = require('../controllers/contentController');
 const mediaController = require('../controllers/mediaController');
 const usersController = require('../controllers/usersController');
 const auditController = require('../lib/audit');
+const backupController = require('../controllers/backupController');
 const { protect, requireRole, requireModuleRole } = require('../middleware/authMiddleware');
 const { loginLimiter } = require('../middleware/rateLimit');
 const societyYearsController = require('../controllers/societyYearsController');
@@ -215,9 +216,15 @@ function buildApiRouter() {
 
   // Activity log - admins only. See lib/audit.js for what gets recorded and why
   // writing to it is deliberately non-blocking.
-  router.get('/admin/activity', requireRole('admin'), h(auditController.list));
-  router.get('/admin/activity/actions', requireRole('admin'), h(auditController.actions));
-  router.post('/admin/activity/prune', requireRole('admin'), h(auditController.prune));
+router.get('/admin/activity', requireRole('admin'), h(auditController.list));
+router.get('/admin/activity/actions', requireRole('admin'), h(auditController.actions));
+router.post('/admin/activity/prune', requireRole('admin'), h(auditController.prune));
+
+// Backups - admins only. Lists what ops/backup.sh has already produced and
+// streams it as a download. The directory is mounted read-only, and
+// env/current.env is deliberately refused (see backupController.js).
+router.get('/admin/backups', requireRole('admin'), h(backupController.list));
+router.get('/admin/backups/:kind/:stamp', requireRole('admin'), h(backupController.download));
 
   return router;
 }

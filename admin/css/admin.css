@@ -211,6 +211,11 @@ code {
 .col-actions { text-align: right; white-space: nowrap; }
 .col-actions .btn { margin-left: 6px; }
 
+/* Backup & Activity tables: timestamps and byte counts read badly left-aligned
+   and ragged, so give them their own columns. */
+.col-date { white-space: nowrap; color: var(--muted); }
+.col-size { white-space: nowrap; text-align: right; color: var(--muted); }
+
 /* ------------------------------------------------------------------ states */
 .state { text-align: center; padding: 56px 20px; color: var(--muted); }
 .state.error h3 { color: var(--danger); }

@@ -83,6 +83,50 @@
     return data;
   }
 
+  /**
+   * Download a file from an authenticated endpoint.
+   *
+   * A plain <a href> cannot be used: the token lives in localStorage and is
+   * only ever sent as an Authorization header, so an anchor would fetch the
+   * URL unauthenticated and get a 401. The response is read as a Blob and
+   * handed to a temporary <a download>, which is what puts it in the user's
+   * Downloads folder.
+   */
+  async function download(path, fallbackName) {
+    var headers = {};
+    if (token()) headers['Authorization'] = 'Bearer ' + token();
+
+    var res = await fetch(API + path, { headers: headers });
+    if (res.status === 401) {
+      clearSession();
+      location.href = loginUrl();
+      throw new Error('Session expired. Sign in again.');
+    }
+    if (!res.ok) {
+      var msg = '';
+      try { msg = (await res.json()).error || ''; } catch (e) { /* not json */ }
+      throw new Error(msg || ('Download failed (' + res.status + ').'));
+    }
+
+    var blob = await res.blob();
+    var name = fallbackName || 'download';
+    var disposition = res.headers.get('Content-Disposition') || '';
+    var match = /filename="?([^"]+)"?/.exec(disposition);
+    if (match && match[1]) name = match[1];
+
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Revoking immediately can cancel the download in some browsers; a short
+    // delay is the pragmatic fix.
+    setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+    return { name: name, bytes: blob.size };
+  }
+
   window.AdminAuth = {
     BASE: BASE,
     API: API,
@@ -93,6 +137,7 @@
     loginUrl: loginUrl,
     api: api,
     upload: upload,
+    download: download,
     mediaUrl: function (name) {
       return name ? BASE + '/uploads/' + encodeURIComponent(name) : null;
     }

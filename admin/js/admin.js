@@ -176,6 +176,7 @@
     if (head === 'settings') return user.role === 'admin' ? pageSettings() : noAccess();
     if (head === 'users') return user.role === 'admin' ? pageUsers() : noAccess();
     if (head === 'activity') return user.role === 'admin' ? pageActivity() : noAccess();
+    if (head === 'backup') return user.role === 'admin' ? pageBackup() : noAccess();
     return pageDashboard();
   }
 
@@ -1615,6 +1616,105 @@
     if (!value) return '';
     var s = String(value).replace('T', ' ').replace('Z', '');
     return s.slice(0, 16);
+  }
+
+  // ----------------------------------------------------------------- backups --
+  // Lists the backups ops/backup.sh has already written and downloads them.
+  // Nothing is created here: the app container has no mysqldump, and the
+  // backups directory is mounted read-only, so this page can only ever take a
+  // copy. The nightly 02:15 job is the source of truth.
+  function pageBackup() {
+    var el = view();
+    el.innerHTML =
+      '<div class="page-head"><h1>&#128190; Backup &amp; download</h1>' +
+        '<div class="head-actions"><button class="btn ghost tiny" id="backup-refresh">Refresh</button></div></div>' +
+      '<p class="muted-note">Backups are created automatically by the server every night at 02:15 ' +
+      '(plus a full media archive on Sundays). Download a copy whenever you want one &mdash; ' +
+      'the database dump, the uploaded media, or the binary logs that allow restoring to a ' +
+      'specific moment in the last two weeks.</p>' +
+      '<div id="backup-body"><div class="state"><div class="spinner"></div><p>Loading…</p></div></div>';
+
+    function load() {
+      var body = document.getElementById('backup-body');
+      stateLoad(body, 'Loading backups…');
+      A.api('/admin/backups').then(function (data) {
+        if (!data.mounted) {
+          return stateEmpty(body, esc(data.message || 'No backups directory is mounted.'));
+        }
+        if (!data.groups || !data.groups.length || !data.newest) {
+          return stateEmpty(body, 'No backups yet. The nightly job has not run, or this install is new.');
+        }
+
+        var html = '';
+        data.groups.forEach(function (g) {
+          if (g.secrets) {
+            html += '<div class="panel"><h2>Secrets</h2>' +
+              '<p class="muted-note">' + esc(g.note) + '</p></div>';
+            return;
+          }
+          if (!g.items.length) return;
+          html += '<div class="panel"><h2>' + esc(g.label) +
+            ' <span class="badge">' + g.items.length + '</span></h2>' +
+            '<div class="table-wrap"><table class="list-table"><thead><tr>' +
+            '<th>File</th><th class="col-date">Created</th><th class="col-size">Size</th>' +
+            '<th class="col-actions">Actions</th></tr></thead><tbody>';
+          g.items.slice(0, 12).forEach(function (it) {
+            html += '<tr>' +
+              '<td>' + esc(it.name) + '</td>' +
+              '<td>' + esc(it.mtime ? fmtWhen(it.mtime) : '—') + '</td>' +
+              '<td>' + fmtBytes(it.bytes) + '</td>' +
+              '<td class="col-actions">' +
+              '<button class="btn tiny" data-kind="' + esc(g.kind) + '" data-stamp="' +
+              esc(it.download || it.name) + '" data-name="' + esc(it.name) + '">Download</button>' +
+              '</td></tr>';
+          });
+          html += '</tbody></table></div></div>';
+        });
+
+        if (data.newest) {
+          html = '<div class="upload-box">' +
+            '<div><b>Latest backup:</b> ' + esc(data.newest.name) + ' &middot; ' +
+            fmtBytes(data.newest.bytes) + ' &middot; taken ' +
+            esc(data.newest.mtime ? fmtWhen(data.newest.mtime) : 'unknown') + ' UTC</div>' +
+            '<button class="btn" data-kind="db" data-stamp="' + esc(data.newest.download || data.newest.name) +
+            '" data-name="' + esc(data.newest.name) + '">Download the database dump</button>' +
+            '</div>' + html;
+        }
+
+        body.innerHTML = html;
+
+        body.querySelectorAll('button[data-kind]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var kind = btn.getAttribute('data-kind');
+            var stamp = btn.getAttribute('data-stamp');
+            var label = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Preparing…';
+            A.download('/admin/backups/' + kind + '/' + encodeURIComponent(stamp))
+              .then(function (r) {
+                toast('Downloaded ' + r.name + ' (' + fmtBytes(r.bytes) + ').');
+              })
+              .catch(function (err) {
+                toast(err.message, 'error');
+              })
+              .then(function () {
+                btn.disabled = false;
+                btn.textContent = label;
+              });
+          });
+        });
+      }).catch(function (err) { stateError(body, err); });
+    }
+
+    function fmtBytes(n) {
+      var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      var v = Number(n) || 0, i = 0;
+      while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+      return (i === 0 ? v : v.toFixed(1)) + ' ' + units[i];
+    }
+
+    document.getElementById('backup-refresh').addEventListener('click', load);
+    load();
   }
 
   renderShell();

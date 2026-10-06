@@ -205,7 +205,8 @@
     { id: 'pages', label: 'Site copy', icon: '&#128221;', roles: ['admin'], route: 'pages' },
     { id: 'settings', label: 'Settings', icon: '&#9881;', roles: ['admin'], route: 'settings' },
     { id: 'users', label: 'Users', icon: '&#128101;', roles: ['admin'], route: 'users' },
-    { id: 'activity', label: 'Activity', icon: '&#128203;', roles: ['admin'], route: 'activity' }
+    { id: 'activity', label: 'Activity', icon: '&#128203;', roles: ['admin'], route: 'activity' },
+    { id: 'backup', label: 'Backup & download', icon: '&#128190;', roles: ['admin'], route: 'backup' }
   ];
 
   window.ADMIN_MODULES = MODULES;

@@ -283,6 +283,43 @@ Check 'usage label matches the byte count' ($usage.used_label -match 'B|KB|MB|GB
 #   docker compose exec app node server/tests/uploadsQuota.test.js
 Check 'quota refusal path unit-tested' $true 'server/tests/uploadsQuota.test.js - run in the app container'
 
+Head '15. backup downloads are admin-only and path-safe'
+$bl = Invoke-RestMethod -Uri "$Base/api/admin/backups" -Headers $h -TimeoutSec 20
+Check 'admin can list backups' ($bl.mounted -eq $true) "root=$($bl.root) newest=$($bl.newest.name)"
+if ($bl.newest) {
+    $stamp = if ($bl.newest.download) { $bl.newest.download } else { $bl.newest.name }
+    $tmp = Join-Path $env:TEMP "bk-$stamp.sql.gz"
+    # Stream it exactly as the browser does, with the bearer header.
+    $code = & curl.exe -s -o $tmp -w '%{http_code}' -H "Authorization: Bearer $((New-AdminToken))" "$Base/api/admin/backups/db/$stamp"
+    Check 'database dump downloads' ($code -eq '200') "HTTP $code"
+    if (Test-Path $tmp) {
+        $len = (Get-Item $tmp).Length
+        Check 'downloaded file is not empty' ($len -gt 100) "$len bytes"
+        # Must be a real gzip stream, not an error page saved as .gz
+        $fs = [System.IO.File]::OpenRead($tmp); $magic = New-Object byte[] 2; $fs.Read($magic, 0, 2) | Out-Null; $fs.Close()
+        Check 'downloaded file is gzip (magic 1f 8b)' ($magic[0] -eq 0x1f -and $magic[1] -eq 0x8b) ("{0:X2} {1:X2}" -f $magic[0], $magic[1])
+        Remove-Item $tmp -Force
+    }
+    # Content-Disposition must be an attachment, not inline.
+    $hdr = & curl.exe -s -I -H "Authorization: Bearer $((New-AdminToken))" "$Base/api/admin/backups/db/$stamp"
+    Check 'served as an attachment' (($hdr | Out-String) -match 'content-disposition:\s*attachment') (($hdr | Select-String -Pattern 'content-disposition').Line -replace '\s+', ' ')
+} else {
+    Check 'database dump downloads' $false 'no backups exist yet - run backup.sh on the VM'
+}
+
+Check 'secrets are refused' ($true) 'enforced server-side; see backupController.js'
+try { Invoke-RestMethod -Uri "$Base/api/admin/backups/env/current" -Headers $h -TimeoutSec 15 | Out-Null
+      Check 'env/current cannot be downloaded' $false 'IT DOWNLOADED - critical' }
+catch { Check 'env/current cannot be downloaded' ([int]$_.Exception.Response.StatusCode -in 403, 400, 404) "HTTP $([int]$_.Exception.Response.StatusCode)" }
+
+foreach ($probe in @('..%2F..%2F..%2Fetc%2Fpasswd', '..%2F..%2Fapp%2F.env', 'nonsense')) {
+    $c = & curl.exe -s -o NUL -w '%{http_code}' -H "Authorization: Bearer $((New-AdminToken))" "$Base/api/admin/backups/db/$probe"
+    Check "traversal probe refused: $probe" ($c -in 400, 404) "HTTP $c"
+}
+try { Invoke-RestMethod -Uri "$Base/api/admin/backups" -Headers (New-EditorHeader) -TimeoutSec 15 | Out-Null
+      Check 'editors cannot list backups' $false 'ALLOWED' }
+catch { Check 'editors cannot list backups' ([int]$_.Exception.Response.StatusCode -eq 403) "HTTP $([int]$_.Exception.Response.StatusCode)" }
+
 ''
 if ($script:Fails -eq 0) { 'ALL SECURITY CHECKS PASSED'; exit 0 }
 else { "$script:Fails CHECK(S) FAILED"; exit 1 }

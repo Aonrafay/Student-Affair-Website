@@ -55,6 +55,12 @@ services:
         condition: service_healthy
     volumes:
       - uploads_data:/app/uploads
+      # Backups live on the host at /opt/student-affairs/backups and are produced
+      # by ops/backup.sh from cron. Mounted READ-ONLY so the admin panel can list
+      # and download them while the app can never write to or delete a backup.
+      # Set BACKUPS_DIR to relocate it; it must be readable by the container's
+      # uid (root in this image), so a host directory works as-is.
+      - ${BACKUPS_DIR:-/opt/student-affairs/backups}:/backups:ro
 
 volumes:
   db_data:
