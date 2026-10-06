@@ -19,8 +19,13 @@ async function login(req, res) {
   }
   const key = String(email).trim().toLowerCase();
 
+  // token_version MUST be selected here. It is what gets baked into the JWT as
+  // `tv` and compared against the stored value on every request. Leaving it out
+  // signs every token with tv=0, which silently invalidates all logins as soon
+  // as the stored value moves off 0 - e.g. after the first "sign out
+  // everywhere" - because a fresh token would no longer match the row.
   const user = await qOne(
-    'SELECT id, name, email, role, password_hash FROM users WHERE email = ?',
+    'SELECT id, name, email, role, password_hash, token_version FROM users WHERE email = ?',
     [key]
   );
 

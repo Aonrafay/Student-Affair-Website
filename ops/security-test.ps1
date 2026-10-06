@@ -38,6 +38,19 @@ function New-AdminToken {
     $r.token
 }
 
+# Builds a ready-to-use Authorization header. Kept as a function on purpose:
+# interpolating a whole login call into "$(Bearer $(Invoke-RestMethod ...))"
+# silently produced a malformed header, and every request made with it 401'd.
+function New-AuthHeader {
+    param([string]$Email, [string]$Password)
+    $r = Invoke-RestMethod -Uri "$Base/api/auth/login" -Method Post -ContentType 'application/json' `
+        -Body (@{ email = $Email; password = $Password } | ConvertTo-Json)
+    if (-not $r.token) { throw "login for $Email returned no token" }
+    @{ Authorization = 'Bearer ' + $r.token }
+}
+
+function New-EditorHeader { New-AuthHeader $creds['EDITOR_EMAIL'] $creds['EDITOR_PASSWORD'] }
+
 Head '1. security headers present on HTML'
 $html = Invoke-WebRequest -UseBasicParsing -Uri "$Base/admin/login" -TimeoutSec 20
 foreach ($pair in @(
@@ -125,9 +138,9 @@ try {
 
 # A real token with the payload edited (role -> admin) but the original
 # signature: this is what an attacker escalating an editor would attempt.
-$editor = Invoke-RestMethod -Uri "$Base/api/auth/login" -Method Post -ContentType 'application/json' `
-    -Body (@{ email = $creds['EDITOR_EMAIL']; password = $creds['EDITOR_PASSWORD'] } | ConvertTo-Json)
-$tampered = $editor.token -replace ([regex]::Escape('"role":"editor"')), '"role":"admin"'
+$edH0 = New-EditorHeader
+$editorToken = $edH0.Authorization -replace '^Bearer\s+', ''
+$tampered = $editorToken -replace ([regex]::Escape('"role":"editor"')), '"role":"admin"'
 try {
     $r = Invoke-RestMethod -Uri "$Base/api/auth/me" -Headers @{ Authorization = "Bearer $tampered" } -TimeoutSec 15
     Check 'role escalation via tampered payload rejected' ($r.user.role -ne 'admin') "role=$($r.user.role)"
@@ -188,7 +201,7 @@ function JwtPayload { param([string]$T) $p = $T.Split('.')[1].Replace('-','+').R
 
 # Use the editor account: revoking it must not disturb the admin session this
 # script is relying on.
-$edTok = $editor.token
+$edTok = $editorToken
 $pl = JwtPayload $edTok
 Check 'JWT carries a token_version claim' ($null -ne $pl.tv) "tv=$($pl.tv)"
 $hours = [Math]::Round(($pl.exp - $pl.iat) / 3600, 1)
@@ -225,8 +238,8 @@ try {
 }
 
 Head '13. audit log records who did what'
-$edH = @{ Authorization = "Bearer $((Invoke-RestMethod -Uri "$Base/api/auth/login" -Method Post -ContentType 'application/json' -Body (@{ email=$creds['EDITOR_EMAIL']; password=$creds['EDITOR_PASSWORD'] } | ConvertTo-Json)).token)" }
-$before = (Invoke-RestMethod -Uri "$Base/api/admin/activity?limit=200" -Headers $h -TimeoutSec 15).Count
+$edH = New-EditorHeader   # fresh token: section 11 revoked the previous one
+$before = @(Invoke-RestMethod -Uri "$Base/api/admin/activity?limit=200" -Headers $h -TimeoutSec 15).Count
 $probe = Invoke-RestMethod -Uri "$Base/api/admin/posts" -Method Post -Headers $edH -ContentType 'application/json' `
     -Body (@{ title = "audit probe $stamp"; category = 'news' } | ConvertTo-Json)
 Invoke-RestMethod -Uri "$Base/api/admin/posts/$($probe.id)/publish" -Method Post -Headers $edH `
