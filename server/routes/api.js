@@ -8,6 +8,7 @@ const contentController = require('../controllers/contentController');
 const mediaController = require('../controllers/mediaController');
 const usersController = require('../controllers/usersController');
 const { protect, requireRole, requireModuleRole } = require('../middleware/authMiddleware');
+const { loginLimiter } = require('../middleware/rateLimit');
 const societyYearsController = require('../controllers/societyYearsController');
 
 /** Express router with every CMS route. Mounted at BASE_PATH + '/api'. */
@@ -35,7 +36,9 @@ function buildApiRouter() {
   });
 
   // --- Auth --------------------------------------------------------------------
-  router.post('/auth/login', h(authController.login));
+  // Rate limited per email+IP: 5 failures then a 15 minute lockout. Only
+  // failures count, so normal use never trips it.
+  router.post('/auth/login', loginLimiter(), h(authController.login));
   router.get('/auth/me', protect, h(authController.me));
 
   // --- Public: site copy + settings ---------------------------------------------
