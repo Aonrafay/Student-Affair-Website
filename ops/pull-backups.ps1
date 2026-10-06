@@ -1,27 +1,29 @@
 <#
   Pull backups from the VM to this PC.
 
-  Scheduled task, runs daily. Keeps a rolling local window (7 daily +
-  4 weekly) under $Root\backups. Verifies every pulled file against the
-  sha256 list in the manifest the VM writes, and fails loudly if a checksum
-  does not match - a backup nobody verified is not a backup.
+  Scheduled task, runs daily. Keeps a rolling local window and verifies every
+  pulled file against the sha256 list the VM's backup manifest carries, failing
+  the run on any mismatch - a backup nobody verified is not a backup.
 
-  Run manually to test:  powershell -ExecutionPolicy Bypass -File pull-backups.ps1
+    powershell -ExecutionPolicy Bypass -File pull-backups.ps1
 
-  Note on native commands: under $ErrorActionPreference = 'Stop', PowerShell
-  5.1 turns ANY stderr line from a native command into a terminating error -
-  including scp's progress meter - so scp's own exit code never gets read and
-  the resulting message ("...db.sql.gz: No such file or directory") is a lie.
-  Every native call therefore goes through Invoke-Native, which relaxes the
-  preference, runs quietly, and decides success from the exit code.
+  Media policy: media archives are pulled WEEKLY only, not daily. They are the
+  largest artifact by far, and the VM already keeps just one copy; pulling a new
+  multi-gigabyte copy every day would fill this PC (which has far less free space
+  than the VM) for no extra safety. Everything small - database dumps, binary
+  logs, manifests - comes across on every run.
+
+  Size cap: -MaxLocalGB prunes the oldest local backups until the local total
+  fits. Without it, enough daily pulls will silently fill the disk.
 #>
 [CmdletBinding()]
 param(
-    [int]    $KeepDaily  = 7,
-    [int]    $KeepWeekly = 4,
-    [string] $SshHost    = 'vm-students',
-    [string] $RemoteBase = '/opt/student-affairs/backups',
-    [string] $Root       = "$env:USERPROFILE\StudentAffair",
+    [int]    $KeepDaily   = 7,
+    [int]    $KeepWeekly  = 4,
+    [double] $MaxLocalGB  = 15,
+    [string] $SshHost     = 'vm-students',
+    [string] $RemoteBase  = '/opt/student-affairs/backups',
+    [string] $Root        = "$env:USERPROFILE\StudentAffair",
     [switch] $Quiet
 )
 
@@ -35,12 +37,17 @@ function Write-Log {
     $line = '{0} [{1}] {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Level, $Message
     Add-Content -Path $script:LogFile -Value $line
     if ($Quiet -and $Level -eq 'INFO') { return }
-    if ($Level -eq 'ERROR') { Write-Host $line -ForegroundColor Red }
-    elseif ($Level -eq 'WARN') { Write-Host $line -ForegroundColor Yellow }
-    else { Write-Host $line }
+    switch ($Level) {
+        'ERROR' { Write-Host $line -ForegroundColor Red }
+        'WARN'  { Write-Host $line -ForegroundColor Yellow }
+        default { Write-Host $line }
+    }
 }
 
-# Run a native command, tolerating stderr, and report the real exit code.
+# Native commands are run through here: under $ErrorActionPreference = 'Stop',
+# PowerShell 5.1 turns ANY stderr line from a native command into a terminating
+# error - including scp's progress meter - so scp's exit code never gets read
+# and the resulting message ("...db.sql.gz: No such file or directory") is a lie.
 function Invoke-Native {
     param([string]$Exe, [string[]]$NativeArgs)
     $prev = $ErrorActionPreference
@@ -53,137 +60,132 @@ function Invoke-Native {
     return [pscustomobject]@{ Exit = $code; Out = @($out | ForEach-Object { "$_" }) }
 }
 
-$sshArgs = @('-o', 'BatchMode=yes', '-o', 'ConnectTimeout=20', $SshHost)
-$scpArgs = @('-q', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=20')
-
 # scp needs the host attached to the FILE PATH ("host:/path"). Passing a bare
 # hostname as a separate argument makes scp treat it as a local source file.
-function Get-RemoteSpec {
-    param([string]$Path)
-    '{0}:{1}' -f $SshHost, $Path
-}
-
+$sshArgs = @('-o', 'BatchMode=yes', '-o', 'ConnectTimeout=20', $SshHost)
+$scpArgs = @('-q', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=20')
+function Get-RemoteSpec { param([string]$Path) '{0}:{1}' -f $SshHost, $Path }
 function Copy-FromVm {
     param([string]$RemotePath, [string]$LocalPath)
-    return Invoke-Native scp ($scpArgs + @((Get-RemoteSpec $RemotePath), $LocalPath))
+    Invoke-Native scp ($scpArgs + @((Get-RemoteSpec $RemotePath), $LocalPath))
+}
+function Get-RemoteList {
+    param([string]$Glob)
+    $r = Invoke-Native ssh ($sshArgs + @("ls -1 $Glob 2>/dev/null"))
+    @($r.Out | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 }
 
 try {
-    Write-Log "starting pull from $SshHost"
+    Write-Log "starting pull from $SshHost (media weekly, local cap $([int]$MaxLocalGB) GB)"
 
-    # --- 1. can we reach the VM at all, without a password prompt? ----------
+    # --- 1. reachability ------------------------------------------------------
     $probe = Invoke-Native ssh ($sshArgs + @('echo READY'))
     if ($probe.Exit -ne 0 -or ($probe.Out -join '') -notmatch 'READY') {
         throw "cannot reach $SshHost non-interactively (is the public key installed?): $($probe.Out -join ' ')"
     }
 
-    # --- 2. which backups are newest? ---------------------------------------
-    $listArgs = $sshArgs + @(
-        "ls -1 $RemoteBase/db/*.sql.gz 2>/dev/null | sed 's|.*/||; s|\.sql\.gz$||' | sort -r | head -3"
-    )
-    $ls = Invoke-Native ssh $listArgs
-    $stamps = @($ls.Out | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^\d{8}-\d{6}$' })
-    if ($stamps.Count -eq 0) {
-        throw "no database dumps found on $SshHost under $RemoteBase/db (has backup.sh ever run?)"
-    }
-    Write-Log "newest stamps: $($stamps -join ', ')"
+    $dayDir  = Join-Path $Root ('backups\' + (Get-Date -Format 'yyyy-MM-dd'))
+    $weekDir = Join-Path $Root 'backups\_weekly'
+    New-Item -ItemType Directory -Path $dayDir  -Force | Out-Null
+    New-Item -ItemType Directory -Path $weekDir -Force | Out-Null
 
-    # --- 3. pull each one ----------------------------------------------------
-    $dayDir = Join-Path $Root ('backups\' + (Get-Date -Format 'yyyy-MM-dd'))
-    New-Item -ItemType Directory -Path $dayDir -Force | Out-Null
+    # --- 2. pull the newest daily set ----------------------------------------
+    # New layout: db/daily holds the rolling dumps, db/binlog the archives of
+    # closed binary logs, db/manifests the per-dump metadata.
+    $dumps = Get-RemoteList "$RemoteBase/db/daily/*.sql.gz" | Sort-Object -Descending | Select-Object -First $KeepDaily
+    $blogs = Get-RemoteList "$RemoteBase/db/binlog/*.tgz"     | Sort-Object -Descending | Select-Object -First 7
+    $metas = Get-RemoteList "$RemoteBase/db/manifests/*.meta" | Sort-Object -Descending | Select-Object -First 7
+    if (-not $dumps) { throw "no database dumps under $RemoteBase/db/daily (has backup.sh run?)" }
 
     $pulled = 0
-    foreach ($stamp in $stamps) {
-        $dest = Join-Path $dayDir $stamp
+    foreach ($d in $dumps) {
+        $stamp = [System.IO.Path]::GetFileNameWithoutExtension($d) -replace '\.sql$', ''
+        $dest  = Join-Path $dayDir $stamp
         New-Item -ItemType Directory -Path $dest -Force | Out-Null
+        $ok = $true
 
-        $files = @(
-            @{ Remote = "$RemoteBase/db/$stamp.sql.gz";    Local = 'db.sql.gz' }
-            @{ Remote = "$RemoteBase/uploads/$stamp.tgz";  Local = 'uploads.tgz' }
-            @{ Remote = "$RemoteBase/$stamp.manifest";     Local = 'manifest.txt' }
-            @{ Remote = "$RemoteBase/env/$stamp.env";      Local = 'app.env' }
-        )
+        $r = Copy-FromVm "$RemoteBase/db/daily/$(Split-Path $d -Leaf)" (Join-Path $dest 'db.sql.gz')
+        if ($r.Exit -ne 0 -or -not (Test-Path (Join-Path $dest 'db.sql.gz'))) { $ok = $false; Write-Log "could not pull dump $stamp" 'WARN' }
 
-        $allOk = $true
-        foreach ($f in $files) {
-            $local = Join-Path $dest $f.Local
-            $r = Copy-FromVm $f.Remote $local
-            if ($r.Exit -ne 0 -or -not (Test-Path $local)) {
-                Write-Log "could not pull $($f.Remote) (exit $($r.Exit)) $($r.Out -join ' ')" 'WARN'
-                $allOk = $false
-            }
-        }
-        if ($allOk) { $pulled++ }
-        Write-Log "pulled $stamp"
+        $m = Get-RemoteList "$RemoteBase/db/manifests/$stamp.meta"
+        if ($m.Count -eq 1) {
+            $r = Copy-FromVm "$RemoteBase/db/manifests/$stamp.meta" (Join-Path $dest 'manifest.txt')
+            if ($r.Exit -ne 0) { Write-Log "no manifest for $stamp" 'WARN' }
+        } else { $ok = $false; Write-Log "no manifest for $stamp" 'WARN' }
+
+        if ($ok) { $pulled++ }
     }
+    Write-Log "pulled $pulled database dump(s)"
 
-    # --- 4. weekly keeper ----------------------------------------------------
-    $weeklyDir = Join-Path $Root 'backups\_weekly'
-    New-Item -ItemType Directory -Path $weeklyDir -Force | Out-Null
-    $wArgs = $sshArgs + @(
-        "ls -1 $RemoteBase/weekly/*.sql.gz 2>/dev/null | sed 's|.*/||; s|\.sql\.gz$||' | sort -r | head -$KeepWeekly"
-    )
-    $w = Invoke-Native ssh $wArgs
-    $wStamps = @($w.Out | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^\d{8}-\d{6}$' })
-    foreach ($stamp in $wStamps) {
-        $pairs = @(@("db/$stamp.sql.gz", 'db.sql.gz'), @("uploads/$stamp.tgz", 'uploads.tgz'))
-        foreach ($pair in $pairs) {
-            $local = Join-Path $weeklyDir $pair[1]
-            $r = Copy-FromVm "$RemoteBase/weekly/$($pair[0])" $local
-            if ($r.Exit -ne 0) { Write-Log "could not pull weekly $($pair[0])" 'WARN' }
-        }
+    # --- 3. binary logs (small, and the only route to a point-in-time restore) -
+    $blDir = Join-Path $Root 'backups\_binlog'
+    New-Item -ItemType Directory -Path $blDir -Force | Out-Null
+    foreach ($b in $blogs) {
+        $name = Split-Path $b -Leaf
+        Copy-FromVm "$RemoteBase/db/binlog/$name" (Join-Path $blDir $name) | Out-Null
     }
-    if ($wStamps.Count -gt 0) { Write-Log "pulled weekly: $($wStamps -join ', ')" }
+    if ($blogs) { Write-Log "pulled $($blogs.Count) binlog archive(s)" }
+
+    # --- 4. media: weekly only ----------------------------------------------
+    $media = Get-RemoteList "$RemoteBase/media/*.tgz" | Sort-Object -Descending | Select-Object -First $KeepWeekly
+    foreach ($m in $media) {
+        Copy-FromVm "$RemoteBase/media/$(Split-Path $m -Leaf)" (Join-Path $weekDir 'media.tgz') | Out-Null
+    }
+    if ($media) { Write-Log "pulled weekly media archive ($($media.Count) available on the VM)" }
 
     # --- 5. verify checksums -------------------------------------------------
-    # Without this a truncated or corrupted copy still looks like a backup.
-    $checked = 0; $bad = 0
+    # The manifest is key=value text written by backup.sh; db_sha256 is the one
+    # that matters here. Without this a truncated copy still looks like a backup,
+    # and a manifest that lost its checksum line must fail loudly rather than
+    # silently verify nothing.
+    $checked = 0; $bad = 0; $missing = 0
     foreach ($dir in Get-ChildItem -Path $dayDir -Directory) {
-        $manifestPath = Join-Path $dir.FullName 'manifest.txt'
-        if (-not (Test-Path $manifestPath)) { continue }
-        foreach ($line in Get-Content $manifestPath) {
-            if ($line -notmatch '^([0-9a-f]{64})\s+(.+)$') { continue }
-            $expected = $Matches[1]
-            $remoteName = Split-Path $Matches[2] -Leaf
-            $localName = switch -Regex ($remoteName) {
-                '\.sql\.gz$' { 'db.sql.gz' }
-                '\.tgz$'     { 'uploads.tgz' }
-                '\.env$'     { 'app.env' }
-                default      { $null }
-            }
-            if (-not $localName) { continue }
-            $lp = Join-Path $dir.FullName $localName
-            if (-not (Test-Path $lp)) { continue }
-            $actual = (Get-FileHash -Path $lp -Algorithm SHA256).Hash.ToLower()
-            $checked++
-            if ($actual -ne $expected) {
-                $bad++
-                Write-Log "CHECKSUM MISMATCH $($dir.Name)\$localName vm=$expected local=$actual" 'ERROR'
-            }
+        $mp = Join-Path $dir.FullName 'manifest.txt'
+        if (-not (Test-Path $mp)) { continue }
+        $expectDb = $null
+        foreach ($line in Get-Content $mp) {
+            if ($line -match '^db_sha256=([0-9a-f]{64})') { $expectDb = $Matches[1]; break }
+        }
+        if (-not $expectDb) { $missing++; Write-Log "manifest for $($dir.Name) has no db_sha256 - cannot verify" 'WARN'; continue }
+        $db = Join-Path $dir.FullName 'db.sql.gz'
+        if (-not (Test-Path $db)) { continue }
+        $actual = (Get-FileHash -Path $db -Algorithm SHA256).Hash.ToLower()
+        $checked++
+        if ($actual -ne $expectDb) {
+            $bad++
+            Write-Log "CHECKSUM MISMATCH $($dir.Name)\db.sql.gz vm=$expectDb local=$actual" 'ERROR'
         }
     }
-    if ($checked -eq 0) { throw "no checksums verified - manifest missing or unreadable" }
-    if ($bad -gt 0) { throw "$bad of $checked pulled files failed checksum verification" }
-    Write-Log "verified $checked file checksums, all match"
+    if ($checked -eq 0) { throw "no checksums verified - $missing manifest(s) had no db_sha256" }
+    if ($bad -gt 0)    { throw "$bad of $checked pulled dumps failed checksum verification" }
+    Write-Log "verified $checked dump checksum(s), all match"
 
-    # --- 6. prune the local window ------------------------------------------
+    # --- 6. prune by age, then by size --------------------------------------
     $backupRoot = Join-Path $Root 'backups'
     $dailyDirs = Get-ChildItem -Path $backupRoot -Directory |
-                 Where-Object { $_.Name -ne '_weekly' } | Sort-Object Name -Descending
+                 Where-Object { $_.Name -notlike '_*' } | Sort-Object Name -Descending
     foreach ($old in @($dailyDirs | Select-Object -Skip $KeepDaily)) {
         Remove-Item -LiteralPath $old.FullName -Recurse -Force
         Write-Log "pruned local $($old.Name)"
     }
-    $wFiles = Get-ChildItem -Path $weeklyDir -Filter '*.sql.gz' | Sort-Object Name -Descending
-    foreach ($old in @($wFiles | Select-Object -Skip $KeepWeekly)) {
-        Remove-Item -LiteralPath $old.FullName -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath ($old.FullName -replace '\.sql\.gz$', '.tgz') -Force -ErrorAction SilentlyContinue
-        Write-Log "pruned weekly $($old.Name)"
+    $blFiles = Get-ChildItem -Path $blDir -Filter '*.tgz' | Sort-Object Name -Descending
+    foreach ($old in @($blFiles | Select-Object -Skip $KeepWeekly)) {
+        Remove-Item -LiteralPath $old.FullName -Force
     }
 
-    $totals = Get-ChildItem -Path $backupRoot -Recurse -File | Measure-Object Length -Sum
-    Write-Log ("OK - {0}/{1} stamps pulled, {2} local files, {3:N1} MB, checksums {4}/{4} good" -f `
-        $pulled, $stamps.Count, $totals.Count, ($totals.Sum / 1MB), $checked)
+    $cap = $MaxLocalGB * 1GB
+    $total = (Get-ChildItem -Path $backupRoot -Recurse -File | Measure-Object Length -Sum).Sum
+    while ($total -gt $cap) {
+        $old = Get-ChildItem -Path $dayDir -Directory | Sort-Object Name -Ascending | Select-Object -First 1
+        if (-not $old -or $old.Name -eq (Get-Date -Format 'yyyy-MM-dd')) { break }
+        Remove-Item -LiteralPath $old.FullName -Recurse -Force
+        $total = (Get-ChildItem -Path $backupRoot -Recurse -File | Measure-Object Length -Sum).Sum
+        Write-Log "over the $([int]$MaxLocalGB) GB local cap, pruned $($old.Name)"
+    }
+
+    $files = (Get-ChildItem -Path $backupRoot -Recurse -File | Measure-Object)
+    Write-Log ("OK - {0} dump(s), {1} binlog archive(s), {2} files, {3:N1} MB local (cap {4} GB)" -f `
+        $pulled, $blogs.Count, $files.Count, ($total / 1MB), [int]$MaxLocalGB)
 }
 catch {
     Write-Log "FAILED: $($_.Exception.Message)" 'ERROR'

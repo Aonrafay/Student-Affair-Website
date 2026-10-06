@@ -166,14 +166,19 @@ if [ "$MODE" = "weekly" ]; then
   cp "$DIR_DAILY/$STAMP.sql.gz" "$DIR_WEEKLY/$STAMP.sql.gz"
 fi
 
-# The binlog coordinates the dump was taken at, in a form restore-to-time.sh
-# can parse without re-reading the dump.
-SRC_FILE="$(zcat "$DIR_DAILY/$STAMP.sql.gz" | grep -oE "SOURCE_LOG_FILE='[^']+'" | head -1 | cut -d"'" -f2)"
-SRC_POS="$(zcat "$DIR_DAILY/$STAMP.sql.gz" | grep -oE 'SOURCE_LOG_POS=[0-9]+' | head -1 | cut -d= -f2)"
-[ -n "$SRC_POS" ] || SRC_POS="$(zcat "$DIR_DAILY/$STAMP.sql.gz" | grep -oE 'MASTER_LOG_POS=[0-9]+' | head -1 | cut -d= -f2)"
-printf 'stamp=%s\nbinlog_file=%s\nbinlog_pos=%s\ntables=%s\ncommit=%s\ntaken_at=%s\n' \
-  "$STAMP" "$SRC_FILE" "$SRC_POS" "$DB_TABLES" "$COMMIT" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+# The binlog coordinates the dump was taken at, plus a checksum so an offsite
+# copy can prove it arrived intact. The binlog/media checksums are appended
+# further down, once those artifacts exist.
+# `|| true` matters: grep exits 1 when it matches nothing, and under pipefail
+# that would abort the run silently.
+SRC_FILE="$(zcat "$DIR_DAILY/$STAMP.sql.gz" | grep -oE "SOURCE_LOG_FILE='[^']+'" | head -1 | cut -d"'" -f2- || true)"
+SRC_POS="$(zcat "$DIR_DAILY/$STAMP.sql.gz" | grep -oE 'SOURCE_LOG_POS=[0-9]+' | head -1 | cut -d= -f2- || true)"
+[ -n "$SRC_POS" ] || SRC_POS="$(zcat "$DIR_DAILY/$STAMP.sql.gz" | grep -oE 'MASTER_LOG_POS=[0-9]+' | head -1 | cut -d= -f2- || true)"
+DB_SHA="$(sha256sum "$DIR_DAILY/$STAMP.sql.gz" | cut -d' ' -f1)"
+printf 'stamp=%s\nbinlog_file=%s\nbinlog_pos=%s\ntables=%s\ncommit=%s\ntaken_at=%s\ndb_sha256=%s\n' \
+  "$STAMP" "$SRC_FILE" "$SRC_POS" "$DB_TABLES" "$COMMIT" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$DB_SHA" \
   > "$DIR_META/$STAMP.meta"
+LOG "  dump sha256 $DB_SHA"
 
 # ---------------------------------------------------------------------------
 # 2. Binary logs - the point-in-time history
@@ -206,6 +211,7 @@ if [ -n "$(printf '%s' "$TO_ARCHIVE" | tr -d '[:space:]')" ]; then
   gzip -t "$DIR_BINLOG/$STAMP.tgz" || fail "binlog archive is corrupt"
   printf '%s\n' "$TO_ARCHIVE" | grep . | tail -1 > "$DIR_BINLOG/.last-archived"
   LOG "  archived $COUNT binlog file(s) [$ARCHIVE_FILES] -> $(du -h "$DIR_BINLOG/$STAMP.tgz" | cut -f1)"
+  printf 'binlog_sha256=%s\n' "$(sha256sum "$DIR_BINLOG/$STAMP.tgz" | cut -d' ' -f1)" >> "$DIR_META/$STAMP.meta"
 else
   LOG "  nothing new to archive"
 fi
@@ -229,6 +235,7 @@ elif [ "$MEDIA_BACKUP" = "daily" ] || do_media; then
   docker compose exec -T app tar czf - -C /app uploads > "$DIR_MEDIA/$STAMP.tgz" < /dev/null
   gzip -t "$DIR_MEDIA/$STAMP.tgz" || fail "uploads archive is corrupt"
   [ -s "$DIR_MEDIA/$STAMP.tgz" ] || LOG "  WARNING: uploads archive is empty (no media uploaded yet)"
+  printf 'media_sha256=%s\n' "$(sha256sum "$DIR_MEDIA/$STAMP.tgz" | cut -d' ' -f1)" >> "$DIR_META/$STAMP.meta"
 else
   LOG "media archive skipped (MEDIA_BACKUP=$MEDIA_BACKUP and this is a '$MODE' run)"
 fi
