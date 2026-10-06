@@ -357,6 +357,24 @@
         '<div class="media-preview">' + mediaPreviewHtml(v, f.accept) + '</div>' +
       '</div>';
     }
+    if (f.type === 'media-multi') {
+      // Same wire format as a json/lines field - filenames one per line - so
+      // collectForm()'s existing 'lines' branch parses this with no change.
+      // Replaces a hand-typed textarea: typing filenames by hand is how you get
+      // a gallery of broken images.
+      var items = (Array.isArray(v) ? v : String(v || '').split('\n'))
+        .map(function (s) { return String(s).trim(); })
+        .filter(Boolean);
+      return '<div class="media-field media-multi" data-field="' + f.name + '" data-accept="' + esc(f.accept || 'image') + '">' +
+        '<input type="hidden" name="' + name + '" value="' + esc(items.join('\n')) + '">' +
+        '<div class="media-field-row">' +
+          '<button type="button" class="btn tiny" data-choose>Choose images</button>' +
+          '<button type="button" class="btn tiny" data-clear>Clear all</button>' +
+          '<span class="muted-note" data-count></span>' +
+        '</div>' +
+        '<div class="media-preview" data-list></div>' +
+      '</div>';
+    }
     if (f.type === 'json') {
       return '<textarea ' + name + ' rows="' + (f.jsonMode === 'object' ? 6 : 4) + '" data-json="' + esc(f.jsonMode || 'object') + '"' + req + '>' + esc(v) + '</textarea>';
     }
@@ -438,10 +456,81 @@
     refresh();
   }
 
+  /** Wire a multi-image field: thumbnails, add-more, remove-one, reorder. */
+  function bindMultiMediaField(wrap) {
+    if (!wrap) return;
+    var input = wrap.querySelector('input[type="hidden"]');
+    var list = wrap.querySelector('[data-list]');
+    var count = wrap.querySelector('[data-count]');
+    var accept = wrap.getAttribute('data-accept') || 'image';
+
+    function items() {
+      return String(input.value || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+    function setItems(list_) { input.value = list_.join('\n'); paint(); }
+
+    function paint() {
+      var cur = items();
+      count.textContent = cur.length
+        ? cur.length + ' image' + (cur.length > 1 ? 's' : '') + ' selected'
+        : '';
+      if (!cur.length) {
+        list.innerHTML = '<span class="muted-note">No images chosen yet.</span>';
+        return;
+      }
+      list.innerHTML = '<div class="media-grid">' + cur.map(function (fn, i) {
+        var url = A.mediaUrl(fn);
+        return '<div class="media-item static" data-fn="' + esc(fn) + '">' +
+          '<span class="media-thumb">' +
+            (url ? '<img src="' + esc(url) + '" alt="" loading="lazy">' : '<span class="ph-text">?</span>') +
+          '</span>' +
+          '<span class="media-name" title="' + esc(fn) + '">' + esc(fn) + '</span>' +
+          '<span class="media-actions">' +
+            '<button type="button" class="btn tiny ghost" data-move="-1"' + (i === 0 ? ' disabled' : '') + ' title="Move earlier">&larr;</button>' +
+            '<button type="button" class="btn tiny ghost" data-move="1"' + (i === cur.length - 1 ? ' disabled' : '') + ' title="Move later">&rarr;</button>' +
+            '<button type="button" class="btn tiny danger" data-remove>Remove</button>' +
+          '</span>' +
+        '</div>';
+      }).join('') + '</div>';
+
+      list.querySelectorAll('[data-remove]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          setItems(items().filter(function (fn) { return fn !== b.closest('.media-item').getAttribute('data-fn'); }));
+        });
+      });
+      list.querySelectorAll('[data-move]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var dir = Number(b.getAttribute('data-move'));
+          var cur2 = items();
+          var i = cur2.indexOf(b.closest('.media-item').getAttribute('data-fn'));
+          var j = i + dir;
+          if (i === -1 || j < 0 || j >= cur2.length) return;
+          var t = cur2[i]; cur2[i] = cur2[j]; cur2[j] = t;
+          setItems(cur2);
+        });
+      });
+    }
+
+    wrap.querySelector('[data-choose]').addEventListener('click', function () {
+      openMediaPicker(accept, function (picked) {
+        // Add to what is already there; never replace, and never duplicate.
+        var cur = items();
+        picked.forEach(function (p) { if (cur.indexOf(p.filename) === -1) cur.push(p.filename); });
+        setItems(cur);
+      }, { multiple: true });
+    });
+    wrap.querySelector('[data-clear]').addEventListener('click', function () { setItems([]); });
+    paint();
+  }
+
   /** Wire the "Choose from media" pickers inside a form. */
   function bindMediaFields(fields) {
     view().querySelectorAll('.media-field').forEach(function (wrap) {
       var fieldName = wrap.getAttribute('data-field');
+      if (wrap.classList.contains('media-multi')) {
+        bindMultiMediaField(wrap);
+        return;
+      }
       var accept = '';
       for (var i = 0; i < fields.length; i++) {
         if (fields[i].name === fieldName && fields[i].type === 'media') {
@@ -458,54 +547,197 @@
     return String(name || '').replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').trim();
   }
 
-  /** Media picker modal → onPick(filename, altText) with the chosen file. */
-  function openMediaPicker(accept, onPick) {
+  function fmtBytes(n) {
+    var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var v = Number(n) || 0, i = 0;
+    while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+    return (i === 0 ? v : v.toFixed(1)) + ' ' + units[i];
+  }
+
+  function isImageMime(mime) { return String(mime || '').indexOf('image/') === 0; }
+
+  /**
+   * Media picker modal.
+   *
+   *   openMediaPicker(accept, onPick)                      -> single file
+   *   openMediaPicker(accept, onPicks, { multiple: true }) -> many files
+   *
+   * Clicking a thumbnail NO LONGER inserts straight away - it shows a large
+   * preview with the name, size and dimensions so you can check you picked the
+   * right photograph before committing. That used to be the one real weakness:
+   * you could only judge a 60px thumbnail and had no second chance.
+   *
+   * In multiple mode, clicks toggle a selection and "Add selected (n)"
+   * commits the whole set at once.
+   *
+   * onPick  receives (filename, alt) in single mode.
+   * onPicks receives (array of {filename, alt}) in multiple mode.
+   */
+  function openMediaPicker(accept, onPick, options) {
+    options = options || {};
+    var multiple = !!options.multiple;
     var root = document.getElementById('modal-root');
+    var items = [];
+    var chosen = [];      // indices into items, multiple mode only
+    var cursor = 0;       // index shown in the preview pane
+
     root.innerHTML =
       '<div class="modal-overlay"><div class="modal wide" role="dialog" aria-modal="true" aria-label="Choose media">' +
         '<div class="modal-head"><h3>Choose from media</h3>' +
           '<button class="btn tiny ghost" id="picker-close">&times; Close</button></div>' +
         '<div id="picker-body"><div class="state"><div class="spinner"></div><p>Loading…</p></div></div>' +
+        '<div class="modal-actions">' +
+          (multiple
+            ? '<button class="btn ghost" id="picker-cancel">Cancel</button>' +
+              '<button class="btn" id="picker-commit" disabled>Add selected (0)</button>'
+            : '<button class="btn ghost" id="picker-cancel">Cancel</button>' +
+              '<button class="btn" id="picker-commit" disabled>Insert</button>') +
+        '</div>' +
       '</div></div>';
 
-    document.getElementById('picker-close').addEventListener('click', function () { root.innerHTML = ''; });
+    var commitBtn = document.getElementById('picker-commit');
+    var cancelBtn = document.getElementById('picker-cancel');
 
-    A.api('/admin/media').then(function (items) {
-      var body = document.getElementById('picker-body');
+    function close() { root.innerHTML = ''; }
+    document.getElementById('picker-close').addEventListener('click', close);
+    if (cancelBtn) cancelBtn.addEventListener('click', close);
+
+    /** Paint the large preview for items[cursor]. */
+    function paintPreview() {
+      var pane = document.getElementById('picker-preview');
+      var m = items[cursor];
+      if (!pane || !m) return;
+      var url = A.mediaUrl(m.filename);
+      pane.innerHTML =
+        '<div class="picker-preview-img">' +
+          (isImageMime(m.mime)
+            ? '<img src="' + esc(url) + '" alt="">'
+            : '<span class="ph-text">' + esc(m.mime === 'application/pdf' ? 'PDF' : 'FILE') + '</span>') +
+        '</div>' +
+        '<div class="picker-preview-meta">' +
+          '<div class="picker-preview-name">' + esc(m.original_name || m.filename) + '</div>' +
+          '<div class="muted-note">' + fmtBytes(m.size) +
+            (m.mime ? ' &middot; ' + esc(m.mime) : '') + '</div>' +
+          (m.caption ? '<div class="muted-note">' + esc(m.caption) + '</div>' : '') +
+        '</div>';
+    }
+
+    function refreshSelection() {
+      if (!multiple) {
+        commitBtn.disabled = items.length === 0;
+        return;
+      }
+      commitBtn.disabled = chosen.length === 0;
+      commitBtn.textContent = 'Add selected (' + chosen.length + ')';
+      body.querySelectorAll('.media-item').forEach(function (btn) {
+        btn.classList.toggle('selected', chosen.indexOf(Number(btn.getAttribute('data-idx'))) !== -1);
+      });
+    }
+
+    var body;
+
+    /** (Re)draw the grid + upload box from `items`. */
+    function renderList() {
       var filtered = (accept === 'image')
-        ? items.filter(function (m) { return String(m.mime || '').indexOf('image/') === 0; })
-        : (accept === 'pdf' ? items.filter(function (m) { return m.mime === 'application/pdf'; }) : items);
+        ? items.filter(function (m) { return isImageMime(m.mime); })
+        : (accept === 'pdf' ? items.filter(function (m) { return m.mime === 'application/pdf'; })
+                            : items.slice());
 
       if (!filtered.length) {
-        body.innerHTML = '<div class="state empty"><p>No matching media yet — upload one below.</p></div>' + uploadFormHtml(true);
-      } else {
-        body.innerHTML = '<div class="media-grid">' + filtered.map(function (m) {
-          return '<button type="button" class="media-item" data-name="' + esc(m.filename) + '" data-alt="' + esc(mediaAlt(m.original_name || m.filename)) + '">' +
+        body.innerHTML =
+          '<div class="state empty"><p>No matching media yet — upload one below.</p></div>' +
+          uploadFormHtml(true);
+        paintPreview();
+        refreshSelection();
+        bindUpload();
+        return;
+      }
+
+      body.innerHTML =
+        '<div id="picker-preview" class="picker-preview"></div>' +
+        (multiple ? '<p class="muted-note">Click images to select them, then add them together.</p>' : '') +
+        '<div class="media-grid">' + filtered.map(function (m) {
+          var idx = items.indexOf(m);
+          return '<button type="button" class="media-item" data-idx="' + idx + '" data-name="' +
+            esc(m.filename) + '" data-alt="' + esc(mediaAlt(m.original_name || m.filename)) + '">' +
             '<span class="media-thumb">' +
-              (String(m.mime || '').indexOf('image/') === 0
-                ? '<img src="' + esc(A.mediaUrl(m.filename)) + '" alt="">'
-                : '<span class="ph-text">PDF</span>') +
+              (isImageMime(m.mime)
+                ? '<img src="' + esc(A.mediaUrl(m.filename)) + '" alt="" loading="lazy">'
+                : '<span class="ph-text">' + (m.mime === 'application/pdf' ? 'PDF' : 'FILE') + '</span>') +
             '</span>' +
             '<span class="media-name">' + esc(m.original_name || m.filename) + '</span>' +
           '</button>';
         }).join('') + '</div>' + uploadFormHtml(true);
-      }
+
+      paintPreview();
 
       body.querySelectorAll('.media-item').forEach(function (btn) {
         btn.addEventListener('click', function () {
-          root.innerHTML = '';
-          onPick(btn.getAttribute('data-name'), btn.getAttribute('data-alt') || '');
+          cursor = Number(btn.getAttribute('data-idx'));
+          paintPreview();
+          if (multiple) {
+            var at = chosen.indexOf(cursor);
+            if (at === -1) chosen.push(cursor); else chosen.splice(at, 1);
+            refreshSelection();
+          } else {
+            refreshSelection();
+            commitBtn.disabled = false;
+          }
         });
       });
-      // Uploading inside the picker must also *choose* the new file — the second
-      // argument is the single success handler (filename, row).
+
+      refreshSelection();
+      bindUpload();
+    }
+
+    /**
+     * Uploading from inside the picker is the main way images get in, so it
+     * stays here. Single mode: the new file is previewed and left ready to
+     * Insert (not committed blindly). Multiple mode: it is added to the current
+     * selection so several can be uploaded and added in one go.
+     */
+    function bindUpload() {
       bindUploadForm(body, function (filename, row) {
-        root.innerHTML = '';
-        onPick(filename, mediaAlt((row && row.original_name) || filename));
+        A.api('/admin/media').then(function (list) {
+          items = list;
+          var fresh = items.filter(function (m) { return m.filename === filename; })[0];
+          if (fresh) {
+            cursor = items.indexOf(fresh);
+            if (multiple && chosen.indexOf(cursor) === -1) chosen.push(cursor);
+          }
+          renderList();
+          toast('Uploaded ' + ((row && row.original_name) || filename) + ' — add it when you are ready.');
+        });
       });
+    }
+
+    A.api('/admin/media').then(function (list) {
+      items = list;
+      body = document.getElementById('picker-body');
+      renderList();
     }).catch(function (err) {
-      document.getElementById('picker-body').innerHTML = '<div class="state error"><p>' + esc(err.message) + '</p></div>';
+      document.getElementById('picker-body').innerHTML =
+        '<div class="state error"><p>' + esc(err.message) + '</p></div>';
     });
+
+    if (commitBtn) {
+      commitBtn.addEventListener('click', function () {
+        if (multiple) {
+          var out = chosen.map(function (i) {
+            var m = items[i];
+            return { filename: m.filename, alt: mediaAlt(m.original_name || m.filename) };
+          });
+          if (!out.length) return;
+          close();
+          onPick(out, out.length);
+        } else {
+          var m = items[cursor];
+          if (!m) return;
+          close();
+          onPick(m.filename, mediaAlt(m.original_name || m.filename));
+        }
+      });
+    }
   }
 
   // --------------------------------------------- societies: year pages ----
@@ -551,22 +783,23 @@
 
   /** The Markdown editor widget: toolbar + textarea + collapsible preview.
    *  `nameAttr` is a full attribute string, e.g. 'name="f-body"'. */
-  function mdEditorHtml(nameAttr, value, rows, placeholder) {
+function mdEditorHtml(nameAttr, value, rows, placeholder) {
     return '<div class="md-editor">' +
-      '<div class="md-toolbar">' +
-        '<button type="button" class="btn tiny" data-md-cmd="bold" title="Bold"><b>B</b></button>' +
-        '<button type="button" class="btn tiny" data-md-cmd="italic" title="Italic"><i>I</i></button>' +
-        '<button type="button" class="btn tiny" data-md-cmd="h2" title="Heading (##)">Heading</button>' +
-        '<button type="button" class="btn tiny" data-md-cmd="list" title="Bullet list">&bull; List</button>' +
-        '<button type="button" class="btn tiny" data-md-cmd="link" title="Link">Link</button>' +
-        '<button type="button" class="btn tiny" data-md-cmd="image" title="Insert image from the media library">&#128247; Image</button>' +
-        '<button type="button" class="btn tiny ghost md-toggle" title="Live preview">Preview</button>' +
-      '</div>' +
-      '<div class="md-panes">' +
-        '<textarea class="md-input" ' + nameAttr + ' rows="' + (rows || 14) + '" placeholder="' +
-          esc(placeholder || 'Write in Markdown…') + '">' + esc(value == null ? '' : value) + '</textarea>' +
-        '<div class="md-preview" hidden></div>' +
-      '</div>' +
+    '<div class="md-toolbar">' +
+      '<button type="button" class="btn tiny" data-md-cmd="bold" title="Bold"><b>B</b></button>' +
+      '<button type="button" class="btn tiny" data-md-cmd="italic" title="Italic"><i>I</i></button>' +
+      '<button type="button" class="btn tiny" data-md-cmd="h2" title="Heading (##)">Heading</button>' +
+      '<button type="button" class="btn tiny" data-md-cmd="list" title="Bullet list">&bull; List</button>' +
+      '<button type="button" class="btn tiny" data-md-cmd="link" title="Link">Link</button>' +
+      '<button type="button" class="btn tiny" data-md-cmd="image" title="Insert image at the cursor position, from the media library or a new upload">&#128247; Image</button>' +
+      '<button type="button" class="btn tiny ghost md-toggle" title="Live preview">Preview</button>' +
+    '</div>' +
+    '<div class="md-panes">' +
+      '<textarea class="md-input" ' + nameAttr + ' rows="' + (rows || 14) + '" placeholder="' +
+      esc(placeholder || 'Write in Markdown.') + '">' + esc(value == null ? '' : value) + '</textarea>' +
+      '<div class="md-preview" hidden></div>' +
+    '</div>' +
+    '<div class="md-imagestrip"></div>' +
     '</div>';
   }
 
@@ -637,6 +870,101 @@
     var preview = editor.querySelector('.md-preview');
     var toggleBtn = editor.querySelector('.md-toggle');
     var previewTimer = null;
+    var strip = editor.querySelector('.md-imagestrip');
+
+    /**
+     * Every ![...](filename) image referenced in the body, in document order.
+     * Same shape the public renderer matches, so this and the live site always
+     * agree on what counts as an image reference.
+     */
+    function imagesInBody() {
+      var out = [];
+      var re = /!\[[^\]]*\]\(([^)\s]+)\)/g;
+      var m;
+      while ((m = re.exec(ta.value)) !== null) {
+        var src = m[1];
+        if (/^(https?:|\/|data:)/i.test(src)) continue;
+        out.push({ src: src, index: m.index, full: m[0] });
+      }
+      return out;
+    }
+
+    /** Reject that filename wherever it appears in the body. */
+    function removeImageReference(filename) {
+      var lines = ta.value.split('\n');
+      var kept = lines.filter(function (line) {
+        return line.indexOf('](' + filename + ')') === -1;
+      });
+      var removed = lines.length - kept.length;
+      ta.value = kept.join('\n');
+      refresh();
+      paintStrip();
+      toast(removed
+        ? 'Removed ' + removed + ' reference' + (removed > 1 ? 's' : '') + ' to ' + filename + '.'
+        : 'No reference to ' + filename + ' was in the text (the file is still in the media library).');
+    }
+
+    /** Put the caret on the line holding this image, so it is easy to edit around it. */
+    function selectImageInEditor(src) {
+      var at = ta.value.indexOf(src);
+      if (at === -1) return;
+      var lineStart = ta.value.lastIndexOf('\n', at) + 1;
+      ta.focus();
+      ta.setSelectionRange(lineStart, at + src.length);
+      ta.scrollTop = Math.max(0, ta.scrollTop - 40);
+    }
+
+    /**
+     * The visual list of images this post uses.
+     *
+     * Without it the only record of what is in a post is the Markdown source:
+     * adding one means clicking through the toolbar and inserting at a guessed
+     * cursor position, and removing one means hand-editing text. This shows them
+     * as thumbnails and does both.
+     */
+    function paintStrip() {
+      if (!strip) return;
+      var refs = imagesInBody();
+      if (!refs.length) {
+        strip.innerHTML = '<p class="muted-note">No images yet — put your cursor where you want one, then use 🖼 Image.</p>';
+        return;
+      }
+      strip.innerHTML =
+        '<div class="md-imagestrip-head"><b>' + refs.length +
+        ' image' + (refs.length > 1 ? 's' : '') + ' in this text</b>' +
+        '<button type="button" class="btn tiny" id="imgstrip-add">+ Add image</button></div>' +
+        '<div class="media-grid">' + refs.map(function (r) {
+          var url = A.mediaUrl(r.src);
+          return '<div class="media-item static" data-src="' + esc(r.src) + '" title="' + esc(r.src) + '">' +
+            '<span class="media-thumb">' +
+              (url ? '<img src="' + esc(url) + '" alt="" loading="lazy">' : '<span class="ph-text">?</span>') +
+            '</span>' +
+            '<span class="media-name">' + esc(r.src) + '</span>' +
+            '<span class="media-actions">' +
+              '<button type="button" class="btn tiny ghost" data-find>Find</button>' +
+              '<button type="button" class="btn tiny danger" data-del>Remove</button>' +
+            '</span>' +
+          '</div>';
+        }).join('') + '</div>';
+
+      strip.querySelector('#imgstrip-add').addEventListener('click', function () {
+        openMediaPicker('image', function (filename, alt) {
+          insertAtCursor(ta, '![' + (alt || mediaAlt(filename)) + '](' + filename + ')');
+          refresh();
+          paintStrip();
+        });
+      });
+      strip.querySelectorAll('[data-find]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          selectImageInEditor(b.closest('.media-item').getAttribute('data-src'));
+        });
+      });
+      strip.querySelectorAll('[data-del]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          removeImageReference(b.closest('.media-item').getAttribute('data-src'));
+        });
+      });
+    }
 
     function renderPreview() {
       preview.innerHTML = mdRender(ta.value);
@@ -653,7 +981,7 @@
       if (!preview.hidden) renderPreview();
     });
 
-    ta.addEventListener('input', refresh);
+    ta.addEventListener('input', function () { refresh(); paintStrip(); });
 
     editor.querySelectorAll('[data-md-cmd]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -661,13 +989,17 @@
           openMediaPicker('image', function (filename, alt) {
             insertAtCursor(ta, '![' + (alt || mediaAlt(filename)) + '](' + filename + ')');
             refresh();
+            paintStrip();
           });
           return;
         }
         applyMdCmd(ta, btn.getAttribute('data-md-cmd'));
         refresh();
+        paintStrip();
       });
     });
+
+    paintStrip();
   }
 
   /** #/m/societies/<sid>/years — one society's year pages. */
@@ -1007,18 +1339,23 @@
       if (!node) continue;
       var raw = node.value;
 
-      if (f.required && node.type !== 'checkbox' && !String(raw).trim()) {
-        var fe = el.querySelector('[data-error="' + f.name + '"]');
-        if (fe) fe.textContent = 'This field is required.';
-        firstError = firstError || f;
-        continue;
-      }
+if (f.required && node.type !== 'checkbox' && !String(raw).trim()) {
+      var fe = el.querySelector('[data-error="' + f.name + '"]');
+      if (fe) fe.textContent = 'This field is required.';
+      firstError = firstError || f;
+      continue;
+    }
 
-      if (f.type === 'checkbox') {
-        body[f.name] = node.checked ? 1 : 0;
-      } else if (f.type === 'json') {
-        var text = String(raw).trim();
-        if (!text) { body[f.name] = f.jsonMode === 'lines' ? [] : null; continue; }
+    if (f.type === 'checkbox') {
+      body[f.name] = node.checked ? 1 : 0;
+    } else if (f.type === 'json' || f.type === 'media-multi') {
+      // media-multi shares the 'lines' wire format (a hidden input holding
+      // filenames, one per line). Without including its type here it would fall
+      // through to the generic branch below and be stored as a newline string
+      // instead of an array - and the public gallery, which calls .map() on it,
+      // would break.
+      var text = String(raw).trim();
+      if (!text) { body[f.name] = f.jsonMode === 'lines' ? [] : null; continue; }
         if (f.jsonMode === 'lines') {
           body[f.name] = text.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
         } else {
@@ -1088,7 +1425,7 @@
     return '<div class="upload-box' + (compact ? ' compact' : '') + '">' +
       '<input type="file" id="upload-input" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf">' +
       '<button type="button" class="btn" id="upload-btn">Upload file</button>' +
-      '<span class="upload-hint">Images (jpg, png, gif, webp) or PDF, up to 15&nbsp;MB. SVG is not accepted &mdash; use PNG or WebP.</span>' +
+      '<span class="upload-hint">Images (jpg, png, gif, webp) or PDF. SVG is not accepted &mdash; use PNG or WebP.</span>' +
       '<div class="field-error" id="upload-error"></div>' +
     '</div>';
   }

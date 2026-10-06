@@ -61,15 +61,22 @@ CREATE TABLE IF NOT EXISTS settings (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Uploaded files (images + PDFs). Bytes live in /uploads.
+-- size is BIGINT: with uploads no longer capped at the old 15 MB, INT would
+-- overflow past 2,147,483,647 bytes (~2 GB) and the INSERT would fail on a
+-- large file rather than storing it.
 CREATE TABLE IF NOT EXISTS media (
   id            INT AUTO_INCREMENT PRIMARY KEY,
   filename      VARCHAR(255) NOT NULL,
   original_name VARCHAR(255) NOT NULL,
   mime          VARCHAR(100) NOT NULL,
-  size          INT          NOT NULL DEFAULT 0,
+  size          BIGINT       NOT NULL DEFAULT 0,
   caption       VARCHAR(200) NULL,
   created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- media.size was INT. MySQL has no "MODIFY IF EXISTS", so this runs on every
+-- boot; migrate.js treats a duplicate-column error as already applied.
+ALTER TABLE media MODIFY COLUMN size BIGINT NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS posts (
   id           INT AUTO_INCREMENT PRIMARY KEY,

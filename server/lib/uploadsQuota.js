@@ -6,10 +6,11 @@ const path = require('path');
 /**
  * Disk usage guard for the uploads directory.
  *
- * Why this exists: multer caps a single file at 15 MB but nothing capped the
- * total, so one editor (or one runaway script) could fill the VM's disk. Once
- * the volume is full MySQL cannot write either, which takes the whole site
- * down rather than just failing an upload.
+ * Why this exists: the library as a whole had no ceiling. An editor (or a
+ * runaway script) could fill the VM's disk, and once the volume is full MySQL
+ * cannot write either - so the whole site goes down rather than just the
+ * upload failing. This is the limit an operator controls; the per-file cap in
+ * mediaController.js is a separate, much larger number.
  *
  * Directory walking is O(files), and this directory is expected to hold tens of
  * thousands of media files, so the total is cached for CACHE_MS and recomputed

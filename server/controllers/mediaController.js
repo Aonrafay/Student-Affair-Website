@@ -10,7 +10,7 @@ const audit = require('../lib/audit');
 
 // SVG is deliberately NOT allowed. An SVG is an XML document that can carry
 // <script>, and uploads are served from the same origin as the admin panel by
-// express.static - so an SVG would be stored XSS that can read the admin JWT
+// express.static - so so an SVG would be stored XSS that can read the admin JWT
 // out of localStorage. Use PNG or WebP for logos instead.
 const ALLOWED_TYPES = {
   'image/jpeg': '.jpg',
@@ -19,6 +19,35 @@ const ALLOWED_TYPES = {
   'image/webp': '.webp',
   'application/pdf': '.pdf'
 };
+
+/**
+ * Per-file ceiling.
+ *
+ * There is deliberately no per-type limit - one global number, set with
+ * MAX_UPLOAD_BYTES (default 4 GB). The real ceiling an operator controls is
+ * UPLOADS_MAX_BYTES in .env (see lib/uploadsQuota.js), which caps the library
+ * as a whole; this only stops a single transfer from being unbounded.
+ *
+ * multer stops the stream mid-write, so an oversized upload never lands whole
+ * on the disk. It cannot be removed entirely: with no fileSize limit multer
+ * writes until the volume is full, and once the volume is full MySQL cannot
+ * write either, so the whole site goes down rather than just the upload.
+ */
+const MAX_UPLOAD_BYTES = (() => {
+  const raw = process.env.MAX_UPLOAD_BYTES;
+  if (raw === undefined || raw === '') return 4 * 1024 * 1024 * 1024;
+  const n = Number(raw);
+  // 0 or an unparseable value means "no per-file cap"; the quota still applies.
+  return Number.isFinite(n) && n > 0 ? n : 0;
+})();
+
+function humanBytes(n) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let v = Number(n) || 0;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
 
 const storage = multer.diskStorage({
   destination(req, file, cb) {
@@ -35,7 +64,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 15 * 1024 * 1024 },
+  limits: MAX_UPLOAD_BYTES ? { fileSize: MAX_UPLOAD_BYTES } : {},
   fileFilter(req, file, cb) {
     if (ALLOWED_TYPES[file.mimetype]) return cb(null, true);
     cb(new Error('Only images (jpg, png, gif, webp) and PDF files are allowed.'));
@@ -46,6 +75,14 @@ const upload = multer({
 function handleUpload(req, res) {
   upload(req, res, async (err) => {
     if (err) {
+      // multer's own LIMIT_FILE_SIZE message is generic and mentions the number
+      // in bytes; say it in terms the person uploading will recognise.
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({
+          error: `That file is larger than the ${humanBytes(MAX_UPLOAD_BYTES)} per-file limit.` +
+            ' Raise MAX_UPLOAD_BYTES in .env, or compress the file first.'
+        });
+      }
       return res.status(400).json({ error: err.message || 'Upload failed.' });
     }
     if (!req.file) {
@@ -120,4 +157,7 @@ async function mediaUsage(req, res) {
   });
 }
 
-module.exports = { handleUpload, listMedia, deleteMedia, mediaUsage, ALLOWED_TYPES };
+module.exports = {
+  handleUpload, listMedia, deleteMedia, mediaUsage,
+  ALLOWED_TYPES, MAX_UPLOAD_BYTES, humanBytes
+};

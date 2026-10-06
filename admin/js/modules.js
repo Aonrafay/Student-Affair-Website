@@ -59,7 +59,7 @@
         { name: 'cover', label: 'Cover image', type: 'media', accept: 'image' },
         { name: 'highlights', label: 'Highlights (one per line)', type: 'json', jsonMode: 'lines' },
         { name: 'results', label: 'Outcomes / results (one per line)', type: 'json', jsonMode: 'lines' },
-        { name: 'gallery', label: 'Gallery (media filenames, one per line)', type: 'json', jsonMode: 'lines' },
+        { name: 'gallery', label: 'Gallery (choose images)', type: 'media-multi', accept: 'image', jsonMode: 'lines' },
         { name: 'registration_url', label: 'Registration URL', type: 'url' },
         { name: 'slug', label: 'Slug (left empty → generated from title)', type: 'slug' }
       ]

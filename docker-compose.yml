@@ -37,6 +37,11 @@ services:
     environment:
       PORT: 5000
       BASE_PATH: /student-affairs
+      # Upload ceilings. No per-type limits - one number governs every upload.
+      # MAX_UPLOAD_BYTES is per file (0 = no per-file cap); UPLOADS_MAX_BYTES caps
+      # the media library as a whole (0 = no cap). Both are overridable in .env.
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-4294967296}
+      UPLOADS_MAX_BYTES: ${UPLOADS_MAX_BYTES:-21474836480}
       # Secrets are read from the git-ignored root `.env` (Compose reads it
       # automatically); the fallbacks are dev-only values.
       JWT_SECRET: ${JWT_SECRET:-change-this-in-production-please}
