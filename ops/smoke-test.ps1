@@ -131,8 +131,9 @@ try {
         Check "$($pair[1]) is served" ($code -eq '200') "HTTP $code"
     }
 
-    $home = (Invoke-WebRequest -UseBasicParsing -Uri "$Base/" -TimeoutSec 15).Content
-    Check 'pages declare the icon links' (($home -match 'rel="icon"') -and ($home -match 'apple-touch-icon')) ''
+    # Not $home - that name is PowerShell's read-only $HOME.
+    $homeHtml = (Invoke-WebRequest -UseBasicParsing -Uri "$Base/" -TimeoutSec 15).Content
+    Check 'pages declare the icon links' (($homeHtml -match 'rel="icon"') -and ($homeHtml -match 'apple-touch-icon')) ''
 
     # The templates must only be reachable through renderHtml, which substitutes
     # __BASE_PATH__ / __CSP_NONCE__. Serving them raw would leak token strings.
