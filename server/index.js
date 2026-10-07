@@ -50,6 +50,32 @@ app.use(BASE_PATH + '/js', express.static(path.join(paths.public, 'js')));
 app.use(BASE_PATH + '/admin/css', express.static(path.join(paths.admin, 'css')));
 app.use(BASE_PATH + '/admin/js', express.static(path.join(paths.admin, 'js')));
 
+// Favicons sit in public/ next to the page templates, and only css/ and js/
+// are mounted as static directories above. Mounting all of public/ would also
+// expose the raw HTML templates, which must go through renderHtml below to
+// get __BASE_PATH__ / __CSP_NONCE__ substituted - serving them raw would hand
+// out unrendered token strings. So allow the icon files by name instead.
+//
+// Browsers probe /favicon.ico at the site root unprompted; without this it
+// 404s and the tab shows a generic icon. The file names are fixed rather than
+// fingerprinted, so a 7-day cache means a rebrand shows the old icon until it
+// expires or a staff member hard-refreshes - acceptable for a tab icon.
+const FAVICON_FILES = new Map([
+  ['/favicon.ico', 'favicon.ico'],
+  ['/favicon.svg', 'favicon.svg'],
+  ['/apple-touch-icon.png', 'favicon-180x180.png'],
+  ['/favicon-32x32.png', 'favicon-32x32.png'],
+]);
+for (const [route, file] of FAVICON_FILES) {
+  app.get(BASE_PATH + route, (req, res, next) => {
+    const abs = path.join(paths.public, file);
+    // next() (not next(err)) on a missing file, so it falls through to the 404
+    // handler below instead of the JSON error handler.
+    if (!fs.existsSync(abs)) return next();
+    res.sendFile(abs, { maxAge: '7d' }, (err) => { if (err) next(err); });
+  });
+}
+
 // ============================================================================
 // Pages
 // ============================================================================

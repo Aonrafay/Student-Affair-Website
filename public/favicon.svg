@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Student Affairs">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#dbeafe"/>
+      <stop offset="1" stop-color="#60a5fa"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#g)"/>
+  <rect x="1" y="1" width="62" height="62" rx="13" fill="none" stroke="#1d4ed8" stroke-opacity=".18" stroke-width="2"/>
+  <text x="32" y="42" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="27" font-weight="800" letter-spacing="1" fill="#1e3a8a">SA</text>
+</svg>

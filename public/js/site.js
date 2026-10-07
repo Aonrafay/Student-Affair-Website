@@ -110,6 +110,36 @@
   function stateError(el, err) {
     el.innerHTML = '<div class="state error"><h3>Something went wrong</h3><p>' + SA.esc((err && err.message) || 'Please try again.') + '</p></div>';
   }
+  /**
+   * Detail pages are served as a static shell, so a bad slug still returns
+   * HTTP 200 and the not-found only shows up once the client fetches the
+   * record. Without this, a stale or mistyped link renders the generic
+   * "Something went wrong" panel, which reads like a broken site rather than
+   * a missing page. Matches the server-rendered 404.html.
+   */
+  function stateNotFound(el, what) {
+    el.innerHTML =
+      '<div class="state" style="padding:64px 16px">' +
+        '<div class="big">&#128374;&#65039;</div>' +
+        '<h1 style="margin:8px 0">Page not found</h1>' +
+        '<p>' + SA.esc(what || 'The page you are looking for') +
+        ' may have been moved, renamed, or never existed.</p>' +
+        '<p style="margin-top:20px">' +
+          '<a class="btn" href="' + SA.BASE + '/">Back to the homepage</a>' +
+          '<a class="btn ghost" style="color:var(--navy);border-color:var(--navy)" href="' + SA.BASE + '/contact">Contact the office</a>' +
+        '</p>' +
+      '</div>';
+  }
+  /**
+   * Route a failed detail-page fetch to the right state: a 404 means the
+   * record is gone (or the slug is wrong), anything else is a real fault.
+   * Every detail renderer catches through this so a missing post never looks
+   * like an outage.
+   */
+  function stateDetailError(el, err, what) {
+    if (err && err.status === 404) return stateNotFound(el, what);
+    return stateError(el, err);
+  }
 
   function bindNavToggle() {
     const btn = document.getElementById('nav-toggle');
@@ -141,5 +171,13 @@
     }
   }
 
-  window.SITE = { boot: boot, stateLoad: stateLoad, stateEmpty: stateEmpty, stateError: stateError, sitePath: sitePath };
+  window.SITE = {
+    boot: boot,
+    stateLoad: stateLoad,
+    stateEmpty: stateEmpty,
+    stateError: stateError,
+    stateNotFound: stateNotFound,
+    stateDetailError: stateDetailError,
+    sitePath: sitePath
+  };
 })();

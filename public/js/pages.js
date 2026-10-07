@@ -176,7 +176,7 @@
           '<p><a class="btn ghost" href="' + SA.BASE + '/news" style="color:var(--navy);border-color:var(--navy)">&larr; All news</a></p>' +
         '</article>';
     }).catch(function (err) {
-      SITE.stateError(root, err);
+      SITE.stateDetailError(root, err, 'That article');
     });
   }
 // -------------------------------------------------------------- events ----
@@ -244,7 +244,7 @@
           (e.registration_url ? '<p><a class="btn" href="' + SA.esc(e.registration_url) + '" target="_blank" rel="noopener">Register for this event</a></p>' : '') +
           '<p><a class="btn ghost" href="' + SA.BASE + '/events" style="color:var(--navy);border-color:var(--navy)">&larr; All events</a></p>' +
         '</article>';
-    }).catch(function (err) { SITE.stateError(root, err); });
+    }).catch(function (err) { SITE.stateDetailError(root, err, 'That event'); });
   }
 // ------------------------------------------------------------- notices -----
   function notices(root) {
@@ -395,7 +395,7 @@
         });
         content.innerHTML = renderYear(years[0]);
       }
-    }).catch(function (err) { SITE.stateError(root, err); });
+    }).catch(function (err) { SITE.stateDetailError(root, err, 'That society'); });
   }
 
   // ---------------------------------------------------------------- office --
@@ -465,7 +465,7 @@
           html += '<div class="grid-3">' + others.map(stdCard).join('') + '</div>';
         }
         root.innerHTML = html;
-      }).catch(function (err) { SITE.stateError(root, err); });
+    }).catch(function (err) { SITE.stateError(root, err); });
   }
   // ------------------------------------------------------------- partners ---
   // Collaboration types, most important first. Mirrors `partnerCategories` in
@@ -553,7 +553,7 @@
             : '') +
           '<p style="margin-top:26px"><a class="btn ghost" href="' + SA.BASE + '/partners" style="color:var(--navy);border-color:var(--navy)">&larr; All partners</a></p>' +
         '</article>';
-    }).catch(function (err) { SITE.stateError(root, err); });
+    }).catch(function (err) { SITE.stateDetailError(root, err, 'That partner'); });
   }
 
   // ----------------------------------------------------------- documents ----

@@ -109,6 +109,54 @@ try {
     Check 'uploaded file is served over HTTP' $served "bytes=$($r.RawContentLength)"
 
     Remove-Item $png -Force -ErrorAction SilentlyContinue
+
+    # --- favicon + not-found wiring -------------------------------------------
+    # Browsers probe /favicon.ico unprompted; it used to 404 because only css/
+    # and js/ were mounted static. The icons live beside the page templates, so
+    # this also pins the decision NOT to mount public/ wholesale.
+    $ico = $null
+    try { $ico = Invoke-WebRequest -UseBasicParsing -Uri "$Base/favicon.ico" -TimeoutSec 15 } catch {}
+    $icoOk = $ico -and $ico.StatusCode -eq 200 -and $ico.RawContentLength -gt 1000
+    # ICO magic: 00 00 01 00
+    $icoMagic = $false
+    if ($icoOk) {
+        $bytes = $ico.Content
+        if ($bytes -is [byte[]]) { $icoMagic = ($bytes[0] -eq 0 -and $bytes[1] -eq 0 -and $bytes[2] -eq 1 -and $bytes[3] -eq 0) }
+    }
+    Check 'favicon.ico is served and is a real ICO' ($icoOk -and $icoMagic) `
+        "status=$($ico.StatusCode) bytes=$($ico.RawContentLength) ctype=$($ico.Headers['Content-Type'])"
+
+    foreach ($pair in @(@('/favicon.svg', 'svg'), @('/apple-touch-icon.png', 'apple-touch-icon.png'), @('/favicon-32x32.png', 'favicon-32x32.png'))) {
+        $code = & curl.exe -s -o NUL -w '%{http_code}' --max-time 10 "$Base$($pair[0])"
+        Check "$($pair[1]) is served" ($code -eq '200') "HTTP $code"
+    }
+
+    $home = (Invoke-WebRequest -UseBasicParsing -Uri "$Base/" -TimeoutSec 15).Content
+    Check 'pages declare the icon links' (($home -match 'rel="icon"') -and ($home -match 'apple-touch-icon')) ''
+
+    # The templates must only be reachable through renderHtml, which substitutes
+    # __BASE_PATH__ / __CSP_NONCE__. Serving them raw would leak token strings.
+    $tmpl = & curl.exe -s -o NUL -w '%{http_code}' --max-time 10 "$Base/news-detail.html"
+    Check 'raw page templates are NOT served as static files' ($tmpl -eq '404') "HTTP $tmpl (expect 404)"
+
+    # Detail pages are a static shell, so a bad slug still returns 200 and the
+    # not-found is decided client-side. Assert every detail renderer routes its
+    # catch through the 404-aware helper instead of the generic error state.
+    $siteJs  = (Invoke-WebRequest -UseBasicParsing -Uri "$Base/js/site.js" -TimeoutSec 20).Content
+    $pagesJs = (Invoke-WebRequest -UseBasicParsing -Uri "$Base/js/pages.js" -TimeoutSec 20).Content
+    Check 'site.js exposes the 404-aware detail error helper' `
+        (($siteJs -match 'stateNotFound') -and ($siteJs -match 'stateDetailError')) ''
+
+    foreach ($pair in @(@('article', 'newsDetail'), @('event', 'eventDetail'), @('society', 'societyDetail'), @('partner', 'partnerDetail'))) {
+        # Isolate the function body, then confirm its catch is not stateError.
+        $start = $pagesJs.IndexOf("function $($pair[1])(")
+        if ($start -lt 0) { Check "$($pair[1]) exists" $false 'function not found'; continue }
+        $nextFn = $pagesJs.IndexOf('  function ', $start + 10)
+        if ($nextFn -lt 0) { $nextFn = $pagesJs.Length }
+        $body = $pagesJs.Substring($start, $nextFn - $start)
+        Check "$($pair[1]) renders a not-found state on 404" `
+            (($body -match 'stateDetailError') -and ($body -notmatch 'SITE\.stateError')) ''
+    }
 }
 finally {
     if ($KeepData) {
