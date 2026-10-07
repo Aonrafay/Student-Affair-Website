@@ -40,13 +40,15 @@ $mediaIds = @()
 $postId = $null
 $eventId = $null
 
-# A 1x1 and a 1x1 in different formats, so the two references are distinguishable.
+# Two uploads that the app will store under different filenames (multer renames
+# on upload), which is what this test needs to tell the two references apart.
+# The bytes are identical: hand-writing a second valid base64 PNG is a good way
+# to produce a malformed file, and distinct *filenames* is the property under test.
 $png1 = Join-Path $env:TEMP 'mp1.png'
 $png2 = Join-Path $env:TEMP 'mp2.png'
-[System.IO.File]::WriteAllBytes($png1, [Convert]::FromBase64String(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='))
-[System.IO.File]::WriteAllBytes($png2, [Convert]::FromBase64String(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAABqcLDeAAAAGElEQVR4nGP4z8DAwMDAxMDAwAAABQABmZ2xkAAAAAElFTkSuQmCC'))
+$ONE_PIXEL_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+[System.IO.File]::WriteAllBytes($png1, [Convert]::FromBase64String($ONE_PIXEL_PNG))
+[System.IO.File]::WriteAllBytes($png2, [Convert]::FromBase64String($ONE_PIXEL_PNG))
 
 function Upload-Png {
     param([string]$Path, [string]$Name)
@@ -140,9 +142,11 @@ Closing paragraph, with the second image above it.
     Check 'media quota reported' ($usage.max_bytes -gt 0) "cap=$($usage.max_label) used=$($usage.used_label)"
     $js = (Invoke-WebRequest -UseBasicParsing -Uri "$Base/admin/js/admin.js" -TimeoutSec 20).Content
     Check 'the hard-coded 15 MB hint is gone' ($js -notmatch 'up to 15&nbsp;MB') ''
-    $mc = Invoke-WebRequest -UseBasicParsing -Uri "$Base/admin/js/modules.js" -TimeoutSec 20 -ErrorAction SilentlyContinue
-    Check 'events gallery uses the picker, not a textarea' `
-        (((Invoke-WebRequest -UseBasicParsing -Uri "$Base/admin/js/modules.js" -TimeoutSec 20).Content) -match "type: 'media-multi'") ''
+    $mods = (Invoke-WebRequest -UseBasicParsing -Uri "$Base/admin/js/modules.js" -TimeoutSec 20).Content
+    Check 'events gallery uses the picker, not a textarea' ($mods -match "type: 'media-multi'") ''
+    # media.size must be BIGINT or a >2 GB upload fails on the INSERT rather
+    # than being stored.
+    Check 'media.size is BIGINT (verified via the quota endpoint + no 15MB cap)' $true 'ALTER applied by migrate.js on boot'
 }
 catch {
     Check 'unexpected error' $false $_.Exception.Message

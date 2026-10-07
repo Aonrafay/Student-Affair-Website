@@ -366,7 +366,7 @@
         .map(function (s) { return String(s).trim(); })
         .filter(Boolean);
       return '<div class="media-field media-multi" data-field="' + f.name + '" data-accept="' + esc(f.accept || 'image') + '">' +
-        '<input type="hidden" name="' + name + '" value="' + esc(items.join('\n')) + '">' +
+        '<input type="hidden" ' + name + ' value="' + esc(items.join('\n')) + '">' +
         '<div class="media-field-row">' +
           '<button type="button" class="btn tiny" data-choose>Choose images</button>' +
           '<button type="button" class="btn tiny" data-clear>Clear all</button>' +
