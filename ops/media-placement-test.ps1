@@ -147,6 +147,23 @@ Closing paragraph, with the second image above it.
     # media.size must be BIGINT or a >2 GB upload fails on the INSERT rather
     # than being stored.
     Check 'media.size is BIGINT (verified via the quota endpoint + no 15MB cap)' $true 'ALTER applied by migrate.js on boot'
+
+    Head '8. the picker fields are actually wired to collectForm()'
+    # Regression: the media-multi hidden input was rendered as
+    # name="name="f-gallery"" - the attribute came out literally as "name=",
+    # so collectForm()'s [name="f-gallery"] lookup missed it and the gallery
+    # was silently dropped on save. Every API-level check above still passed
+    # with that bug in place, because they POST directly to the API.
+    # fieldInputHtml() builds `name` as a ready-made attribute string
+    # (name="f-<field>"), so it must be interpolated as-is, never wrapped in
+    # another name="...". Assert that on every media-multi field's definition.
+    $fieldSource = $js
+    $badWrap = [regex]::Matches($fieldSource, 'type="hidden"\s+name="''?\s*\+')
+    Check 'media-multi hidden input reuses the name attribute string' ($badWrap.Count -eq 0) `
+        "$($badWrap.Count) occurrence(s) of a hidden input re-wrapping `name in quotes"
+    $hiddenInputs = [regex]::Matches($fieldSource, '<input type="hidden"\s+''\s*\+\s*name\s*\+\s*''\s+value=')
+    Check 'media-multi hidden input interpolates name directly' ($hiddenInputs.Count -ge 1) `
+        "$($hiddenInputs.Count) field(s) using the correct form"
 }
 catch {
     Check 'unexpected error' $false $_.Exception.Message
