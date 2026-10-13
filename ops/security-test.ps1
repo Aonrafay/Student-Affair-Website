@@ -320,6 +320,137 @@ try { Invoke-RestMethod -Uri "$Base/api/admin/backups" -Headers (New-EditorHeade
       Check 'editors cannot list backups' $false 'ALLOWED' }
 catch { Check 'editors cannot list backups' ([int]$_.Exception.Response.StatusCode -eq 403) "HTTP $([int]$_.Exception.Response.StatusCode)" }
 
+# The backup kinds other than 'db' were never exercised, and the anonymous case
+# was never exercised against these routes at all. 'env' is refused by design, so
+# a 403 there is the passing outcome, not a failure.
+Head '16. backup downloads: every kind, and anonymous access'
+$anonBackup = & curl.exe -s -o NUL -w '%{http_code}' "$Base/api/admin/backups"
+Check 'anonymous cannot list backups' ($anonBackup -in 401, 403) "HTTP $anonBackup"
+if ($bl.newest) {
+    $bs = if ($bl.newest.download) { $bl.newest.download } else { $bl.newest.name }
+    foreach ($kind in @('media', 'binlog', 'manifest')) {
+        $c = & curl.exe -s -o NUL -w '%{http_code}' -H "Authorization: Bearer $((New-AdminToken))" "$Base/api/admin/backups/$kind/$bs"
+        # 200 if that artifact exists for the newest stamp, otherwise the route
+        # correctly reports nothing for it. Anything 5xx is a real failure.
+        Check "backup kind '$kind' answers cleanly" ($c -in 200, 204, 400, 404) "HTTP $c"
+    }
+    $anonDl = & curl.exe -s -o NUL -w '%{http_code}' "$Base/api/admin/backups/db/$bs"
+    Check 'anonymous cannot download a dump' ($anonDl -in 401, 403) "HTTP $anonDl"
+}
+
+Head '17. upload content must match its declared type'
+# fileFilter only sees the client-supplied Content-Type, which is trivially
+# forged. Uploads are served from the admin's own origin, so HTML stored under a
+# .png name would be stored XSS. Each of these declares a real allowed type and
+# carries content that is not that type.
+$spoofs = @(
+    @{ name = 'HTML-as-PNG';   body = '<html><body><script>alert(1)</script></body></html>'; mime = 'image/png'  }
+    @{ name = 'SVG-as-JPEG';   body = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'; mime = 'image/jpeg' }
+    @{ name = 'script-as-GIF'; body = "GIF89a`n<script>alert(1)</script>"; mime = 'image/gif' }
+    @{ name = 'text-as-PDF';   body = 'just plain text, definitely not a pdf'; mime = 'application/pdf' }
+)
+foreach ($s in $spoofs) {
+    $tmp = Join-Path $env:TEMP "spoof-$stamp-$(($s.mime -replace '\W','')).dat"
+    [System.IO.File]::WriteAllText($tmp, $s.body)
+    $code = & curl.exe -s -o NUL -w '%{http_code}' -X POST "$Base/api/admin/media" `
+        -H "Authorization: Bearer $((New-AdminToken))" -F "file=@$tmp;type=$($s.mime)" -F "caption=spoof-probe"
+    Check "spoofed upload rejected: $($s.name)" ($code -eq 400) "HTTP $code (declared $($s.mime))"
+    Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+}
+# A rejected upload must leave nothing behind: no row, and the file deleted.
+$afterSpoof = Invoke-RestMethod -Uri "$Base/api/admin/media" -Headers (New-AuthHeader $creds['ADMIN_EMAIL'] $creds['ADMIN_PASSWORD']) -TimeoutSec 15
+Check 'no media row survived the rejected spoofs' (-not (@($afterSpoof) | Where-Object { $_.caption -eq 'spoof-probe' })) ''
+
+Head '18. database errors must not reach the client'
+# These routes used to answer 400 with the driver's own message, e.g.
+# "Data too long for column 'title' at row 1" - free schema reconnaissance.
+$leakPat = 'ER_[A-Z_]+|Data too long|Duplicate entry|at Object\.|node_modules|node:internal|SQLSTATE'
+$longPayload = Join-Path $env:TEMP "long-$stamp.json"
+@{ title = ('T' * 5000) } | ConvertTo-Json | Set-Content -Path $longPayload -NoNewline -Encoding UTF8
+$resp = & curl.exe -s -X POST "$Base/api/admin/posts" -H "Authorization: Bearer $((New-AdminToken))" `
+    -H "Content-Type: application/json" --data-binary "@$longPayload"
+$respStr = ($resp | Out-String)
+Check 'oversized title returns no driver detail' ($respStr -notmatch $leakPat) ($respStr.Trim() -replace "`r?`n", ' ')
+# Guards against a vacuous pass: the request must actually have reached MySQL.
+# A JSON parse error would prove nothing about the error handling.
+Check 'the oversized request really reached the database' `
+    (($respStr -match 'Could not save') -and ($respStr -notmatch 'JSON at position')) '400 from the DB, not the parser'
+Remove-Item $longPayload -Force -ErrorAction SilentlyContinue
+
+$hl = & curl.exe -s "$Base/api/health"
+$hlStr = ($hl | Out-String)
+Check 'health endpoint leaks nothing on failure' ($hlStr -notmatch $leakPat) ($hlStr.Trim() -replace "`r?`n", ' ')
+
+Head '19. stored Markdown cannot inject HTML'
+# marked passes raw HTML in the source through to innerHTML. The sanitiser
+# itself is unit-tested against the real bundle in ops/markdown-sanitizer.test.js
+# (covers escaping, URL schemes, and that ordinary Markdown still renders). Here
+# we assert the hardened bundle is actually the one being served.
+$apiJs = (Invoke-WebRequest -UseBasicParsing -Uri "$Base/js/api.js" -TimeoutSec 20).Content
+Check 'public bundle ships the renderer override' ($apiJs -match 'renderer:\s*mdRenderer\(\)') ''
+Check 'public bundle ships the URL scheme allowlist' ($apiJs -match 'safeUrl') ''
+# Inheriting from marked.Renderer matters: a plain object REPLACES the renderer
+# and every article renders as bare source text.
+Check 'renderer inherits from marked.Renderer' ($apiJs -match 'new window\.marked\.Renderer\(\)') ''
+$admJs = (Invoke-WebRequest -UseBasicParsing -Uri "$Base/admin/js/admin.js" -TimeoutSec 20).Content
+Check 'admin bundle ships the same renderer override' ($admJs -match 'renderer:\s*mdRenderer\(\)') ''
+
+Head '20. mass assignment is rejected'
+$massToken = New-AdminToken
+$massPost = Invoke-RestMethod -Uri "$Base/api/admin/posts" -Method Post -Headers @{ Authorization = "Bearer $massToken" } `
+    -ContentType 'application/json' -Body (@{ title = "mass assignment probe $stamp"; id = 999999; created_at = '1999-01-01 00:00:00'; definitely_not_a_column = 'x' } | ConvertTo-Json)
+Check 'an off-whitelist column is ignored, not stored' ($null -eq $massPost.definitely_not_a_column) ''
+Check 'a caller-supplied id is ignored' ($massPost.id -ne 999999) "server assigned id=$($massPost.id)"
+$massPostId = $massPost.id
+# And the update path, which is a separate code branch from create.
+$massUpd = Invoke-RestMethod -Uri "$Base/api/admin/posts/$massPostId" -Method Put -Headers @{ Authorization = "Bearer $massToken" } `
+    -ContentType 'application/json' -Body (@{ created_at = '1999-01-01 00:00:00'; nope = 1 } | ConvertTo-Json)
+Check 'update also ignores off-whitelist columns' ($null -eq $massUpd.nope) ''
+try { Invoke-RestMethod -Uri "$Base/api/admin/posts/$massPostId" -Method Delete -Headers @{ Authorization = "Bearer $massToken" } -TimeoutSec 15 | Out-Null } catch {}
+
+Head '21. only admin can change users'
+$editorToken = (New-EditorHeader)['Authorization'] -replace '^Bearer ', ''
+$before = Invoke-RestMethod -Uri "$Base/api/admin/users" -Headers (New-AuthHeader $creds['ADMIN_EMAIL'] $creds['ADMIN_PASSWORD']) -TimeoutSec 15
+$someUser = @($before)[0]
+if ($someUser) {
+    # Send the body from a file. Inline JSON through curl.exe gets its quotes
+    # eaten by PowerShell's native argument handling, which produced a 400
+    # "Expected property name" - a parse error, not an authorisation result, so
+    # it would have tested nothing.
+    $userProbe = Join-Path $env:TEMP "userprobe-$stamp.json"
+    @{ role = 'admin'; name = 'probe' } | ConvertTo-Json | Set-Content -Path $userProbe -NoNewline -Encoding UTF8
+    foreach ($m in @('PUT', 'POST', 'DELETE')) {
+        $path = if ($m -eq 'POST') { "$Base/api/admin/users" } else { "$Base/api/admin/users/$($someUser.id)" }
+        $out = & curl.exe -s -X $m $path -H "Authorization: Bearer $editorToken" `
+            -H 'Content-Type: application/json' --data-binary "@$userProbe" -w ' HTTP:%{http_code}'
+        $code = ($out | Out-String).Trim()
+        Check "editor $m /admin/users is refused" ($code -match 'HTTP:(401|403)') $code
+    }
+    Remove-Item $userProbe -Force -ErrorAction SilentlyContinue
+
+    # token_version is the session-revocation lever, so it must never be settable
+    # from a request body - writing it would let anyone sign every account out,
+    # and lowering it would resurrect old tokens. The controller builds its UPDATE
+    # from an explicit field list and recomputes token_version server-side, so the
+    # write is accepted and ignored: HTTP 200 is the expected answer, and the
+    # real proof is that a session issued BEFORE the attempt still works.
+    $sessBefore = New-AdminToken
+    $tvProbe = Join-Path $env:TEMP "tvprobe-$stamp.json"
+    @{ token_version = 999; name = 'probe-not-applied' } | ConvertTo-Json | Set-Content -Path $tvProbe -NoNewline -Encoding UTF8
+    & curl.exe -s -o NUL -X PUT "$Base/api/admin/users/$($someUser.id)" `
+        -H "Authorization: Bearer $((New-AdminToken))" -H 'Content-Type: application/json' --data-binary "@$tvProbe"
+    try {
+        Invoke-RestMethod -Uri "$Base/api/auth/me" -Headers @{ Authorization = "Bearer $sessBefore" } -TimeoutSec 15 | Out-Null
+        Check 'writing token_version does not revoke existing sessions' $true 'session issued before the write still valid'
+    } catch {
+        Check 'writing token_version does not revoke existing sessions' $false "session was revoked (HTTP $([int]$_.Exception.Response.StatusCode))"
+    }
+    # And confirm the field is never echoed back to a client.
+    $after = Invoke-RestMethod -Uri "$Base/api/admin/users" -Headers (New-AuthHeader $creds['ADMIN_EMAIL'] $creds['ADMIN_PASSWORD']) -TimeoutSec 15
+    Check 'token_version is not exposed by the API' ($null -eq (@($after) | Select-Object -First 1).token_version) ''
+    Remove-Item $tvProbe -Force -ErrorAction SilentlyContinue
+}
+
 ''
 if ($script:Fails -eq 0) { 'ALL SECURITY CHECKS PASSED'; exit 0 }
 else { "$script:Fails CHECK(S) FAILED"; exit 1 }
