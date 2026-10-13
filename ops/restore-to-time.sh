@@ -281,7 +281,7 @@ else
 fi
 
 # --- 3. report ---------------------------------------------------------------
-TABLES="$(mysql_root -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$TARGET_DB'" | tr -d '\r')"
+TABLES="$(mysql_root -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$TARGET_DB'" | tr -d '[:space:]')"
 log "recovered $TABLES table(s) in $TARGET_DB"
 if [ "$KEEP" -eq 1 ]; then
   log "scratch schema dropped; live data untouched"

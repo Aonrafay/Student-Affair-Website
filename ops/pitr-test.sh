@@ -82,7 +82,7 @@ sleep 1
 mysql_root -e "FLUSH BINARY LOGS" > /dev/null
 bash "$BASE/backup.sh" daily 2>&1 | grep -E 'archived' | sed 's/^/  /'
 log "deleted at $DELETE_TIME UTC"
-LIVE="$(mysql_live -e "SELECT COUNT(*) FROM posts WHERE title='$MARKER'" | tr -d '\r')"
+LIVE="$(mysql_live -e "SELECT COUNT(*) FROM posts WHERE title='$MARKER'" | tr -d '[:space:]')"
 log "live rows matching the marker now: $LIVE (expected 0)"
 [ "$LIVE" = "0" ] || fail "the marker still exists in live data - aborting"
 
@@ -101,7 +101,7 @@ SCHEMA="$(timeout 600 bash "$BASE/restore-to-time.sh" "$TARGET" --from "$BASE_DU
           | sed -n 's/.*recovered .* table(s) in \([a-z_0-9]*\)/\1/p' | tail -1)"
 [ -n "$SCHEMA" ] || { tail -20 "$BASE/backups/.pitr-last.log" | sed 's/^/    /'; fail "restore-to-time did not report a scratch schema"; }
 
-FOUND="$(mysql_root -e "SELECT COUNT(*) FROM \`$SCHEMA\`.posts WHERE title='$MARKER'" | tr -d '\r')"
+FOUND="$(mysql_root -e "SELECT COUNT(*) FROM \`$SCHEMA\`.posts WHERE title='$MARKER'" | tr -d '[:space:]')"
 if [ "${FOUND:-0}" -ge 1 ]; then
   log "PASS - the recovered schema contains the deleted post (rows=$FOUND)"
 else
@@ -119,7 +119,7 @@ SCHEMA2="$(timeout 600 bash "$BASE/restore-to-time.sh" "$BEFORE" --from "$BASE_D
 if [ -z "$SCHEMA2" ]; then
   log "SKIP - no dump predates the marker, so the negative case cannot be tested"
 else
-  FOUND2="$(mysql_root -e "SELECT COUNT(*) FROM \`$SCHEMA2\`.posts WHERE title='$MARKER'" | tr -d '\r')"
+  FOUND2="$(mysql_root -e "SELECT COUNT(*) FROM \`$SCHEMA2\`.posts WHERE title='$MARKER'" | tr -d '[:space:]')"
   if [ "${FOUND2:-0}" -eq 0 ]; then
     log "PASS - recovering before the creation correctly excludes it (rows=$FOUND2)"
   else

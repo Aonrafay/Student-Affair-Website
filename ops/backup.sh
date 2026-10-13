@@ -136,7 +136,7 @@ if [ "$AVAIL" -lt "$NEED_BYTES" ]; then
   fail "only $((AVAIL / 1024 / 1024 / 1024)) GB free on /, below the ${MIN_FREE_GB} GB floor. Refusing to run - fix the disk before backing up."
 fi
 
-DB_TABLES="$(mysql_root -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='student_affairs'" | tr -d '\r')"
+DB_TABLES="$(mysql_root -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='student_affairs'" | tr -d '[:space:]')"
 DB_TABLES="${DB_TABLES:-0}"
 COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 

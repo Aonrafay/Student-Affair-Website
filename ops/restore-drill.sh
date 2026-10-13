@@ -61,27 +61,103 @@ mysql_do -e "CREATE DATABASE \`$SCRATCH\` CHARACTER SET utf8mb4;"
 log "importing dump"
 zcat "$DUMP" | docker compose exec -T -e MYSQL_PWD="$ROOTPW" db mysql -uroot "$SCRATCH"
 
-log "comparing row counts (live vs restored)"
-printf '  %-20s %10s %10s %s\n' TABLE LIVE RESTORED RESULT
-drill_ok=1
-mismatch=0
-for t in $TABLES; do
-  live="$(mysql_do -e "SELECT COUNT(*) FROM \`$LIVE_DB\`.\`$t\`" 2>/dev/null | tr -d '\r' || echo '-')"
-  rest="$(mysql_do -e "SELECT COUNT(*) FROM \`$SCRATCH\`.\`$t\`" 2>/dev/null | tr -d '\r' || echo '-')"
-  if [ "$live" = "$rest" ] && [ "$live" != '-' ] && [ "$live" != '0' ]; then
-    res=ok
-  elif [ "$live" = "$rest" ]; then
-    res='ok (empty)'
+# --- verify the dump against its manifest before trusting anything else ------
+STAMP="$(basename "$DUMP" .sql.gz)"
+MANIFEST="$BASE/backups/db/manifests/$STAMP.meta"
+if [ -f "$MANIFEST" ]; then
+  expect_sha="$(sed -n 's/^db_sha256=//p' "$MANIFEST" | tr -d '\r' | head -1)"
+  actual_sha="$(sha256sum "$DUMP" | cut -d' ' -f1)"
+  if [ -n "$expect_sha" ] && [ "$expect_sha" = "$actual_sha" ]; then
+    log "dump matches its manifest checksum (${expect_sha:0:12}…)"
   else
-    res='MISMATCH'; drill_ok=0; mismatch=$((mismatch + 1))
+    log "CHECKSUM MISMATCH: manifest says ${expect_sha:-<none>}, file is $actual_sha"
+    log "  This dump is not the artifact the manifest describes."
+    exit 1
   fi
-  printf '  %-20s %10s %10s %s\n' "$t" "$live" "$rest" "$res"
+else
+  log "WARNING: no manifest for $STAMP - cannot confirm this is the expected dump"
+fi
+
+# --- is the restored copy self-consistent? -----------------------------------
+# This, not "matches live", is what makes a restore usable. Comparing against
+# live data scored every write made since the 02:15 dump as a MISMATCH, which
+# trains people to ignore the drill's output; and a wholly EMPTY backup used to
+# pass, because live==restored==0 scored 'ok (empty)'.
+log "self-consistency of the restored copy"
+drill_ok=1
+missing=""
+for t in $TABLES; do
+  if ! mysql_do -e "SELECT 1 FROM \`$SCRATCH\`.\`$t\` LIMIT 1" >/dev/null 2>&1; then
+    missing="$missing $t"
+  fi
+done
+if [ -n "$missing" ]; then
+  log "FAIL: restored copy is missing expected table(s):$missing"
+  drill_ok=0
+else
+  log "  all $(echo $TABLES | wc -w) expected tables present"
+fi
+
+# A restore you cannot log into, or that renders a header-less site, is not a
+# working restore. These are hard failures, not warnings.
+rest_users="$(mysql_do -e "SELECT COUNT(*) FROM \`$SCRATCH\`.users" | tr -d '\r')"
+rest_settings="$(mysql_do -e "SELECT COUNT(*) FROM \`$SCRATCH\`.settings" | tr -d '\r')"
+rest_posts="$(mysql_do -e "SELECT COUNT(*) FROM \`$SCRATCH\`.posts" | tr -d '\r')"
+log "  users=$rest_users settings=$rest_settings posts=$rest_posts"
+[ "${rest_users:-0}" -ge 1 ] || { log "FAIL: restored users table is empty - nobody could log in"; drill_ok=0; }
+[ "${rest_settings:-0}" -ge 1 ] || { log "FAIL: restored settings table is empty - header and footer would be blank"; drill_ok=0; }
+# Every table is schema-qualified: mysql_do runs without a default database, so
+# an unqualified name here fails with "No database selected".
+rest_total="$(mysql_do -e "
+  SELECT (SELECT COUNT(*) FROM \`$SCRATCH\`.posts)
+       + (SELECT COUNT(*) FROM \`$SCRATCH\`.events)
+       + (SELECT COUNT(*) FROM \`$SCRATCH\`.notices)
+       + (SELECT COUNT(*) FROM \`$SCRATCH\`.pages)
+       + (SELECT COUNT(*) FROM \`$SCRATCH\`.settings)
+       + (SELECT COUNT(*) FROM \`$SCRATCH\`.users)
+       + (SELECT COUNT(*) FROM \`$SCRATCH\`.media)" | tr -d '\r')"
+log "  total content rows restored: ${rest_total:-0}"
+if [ "${rest_total:-0}" -lt 5 ]; then
+  log "FAIL: only ${rest_total:-0} content rows. A backup with 14 correctly shaped but empty tables"
+  log "      passes every structural check above, which is why this one exists."
+  drill_ok=0
+fi
+
+# --- live vs restored: INFORMATION ONLY --------------------------------------
+# Writes between the dump and now always make live larger than restored. That is
+# the expected direction, so a difference is reported, never failed on. A restored
+# count EXCEEDING live would be genuinely alarming, so that still trips.
+log "live vs restored (informational - writes since the dump explain any gap)"
+mismatch=0
+printf '  %-20s %10s %10s %s\n' TABLE LIVE RESTORED NOTE
+for t in $TABLES; do
+  # tr -d '[:space:]' rather than tr -d '\r': mysql's batch output ends in CRLF,
+  # and a surviving carriage return inside [ ] turns the next argument into
+  # "8\r", which bash rejects with "[: syntax error: `-or' unexpected" - the
+  # comparison loop then silently carries on with the wrong branch taken.
+  live="$(mysql_do -e "SELECT COUNT(*) FROM \`$LIVE_DB\`.\`$t\`" 2>/dev/null | tr -d '[:space:]')"
+  rest="$(mysql_do -e "SELECT COUNT(*) FROM \`$SCRATCH\`.\`$t\`" 2>/dev/null | tr -d '[:space:]')"
+  # Only compare numerically when both sides really are integers.
+  case "$live$rest" in
+    ''|*[!0-9]*) note='skipped (table missing or unreadable)' ;;
+    *)
+      if [ "$rest" -gt "$live" ]; then
+        note='RESTORED HAS MORE - investigate'
+        mismatch=$((mismatch + 1))
+      elif [ "$live" -gt "$rest" ]; then
+        note='written since the dump (expected)'
+      else
+        note='identical'
+      fi
+      ;;
+  esac
+  printf '  %-20s %10s %10s %s\n' "$t" "${live:--}" "${rest:--}" "$note"
 done
 
 # A database row pointing at a media file that is not in the archive is broken
 # content: the CMS will render a dead image. Cross-check every media row in the
 # RESTORED copy against the uploads archive taken at the same timestamp.
-STAMP="$(basename "$DUMP" .sql.gz)"
+# STAMP is set above, next to the checksum comparison.
 ARCHIVE="$DIR_MEDIA/$STAMP.tgz"
 [ -f "$ARCHIVE" ] || ARCHIVE="$BASE/backups/uploads/$STAMP.tgz"   # legacy layout
 media_checked=0
@@ -122,8 +198,9 @@ fi
 
 echo
 if [ "$drill_ok" -eq 1 ]; then
-  log "PASS - backup restores cleanly, $mismatch mismatches, live data untouched"
+  log "PASS - this dump restores into a complete, usable site ($mismatch anomaly/anomalies)"
+  log "      Live data was not touched: the import went to the throwaway schema, dropped on exit."
 else
-  log "FAIL - $mismatch table(s) did not match, or the secrets backup is missing"
+  log "FAIL - the restored copy is not usable; see the FAIL lines above"
   exit 1
 fi

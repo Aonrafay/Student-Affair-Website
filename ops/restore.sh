@@ -42,6 +42,7 @@ DIR_DAILY="$BACKUPS/db/daily"
 DIR_WEEKLY="$BACKUPS/db/weekly"
 DIR_MEDIA="$BACKUPS/media"
 DIR_ENV="$BACKUPS/env"
+DIR_MANIFESTS="$BACKUPS/db/manifests"
 
 if [ -z "$STAMP" ]; then
   # Newest dump across both retention buckets.
@@ -72,6 +73,29 @@ log "dump         : $DUMP ($(du -h "$DUMP" | cut -f1))"
 [ "$DB_ONLY" -eq 0 ] && log "uploads      : $ARCHIVE ($(du -h "$ARCHIVE" | cut -f1))"
 gzip -t "$DUMP" || die "dump is corrupt (gzip integrity check failed)"
 
+# --- verify the dump against the manifest recorded when it was taken ----------
+# gzip -t only proves the stream decompresses. It cannot tell you the file is the
+# right dump: a half-finished scp, a stale copy from last week, or a file from a
+# different stamp all pass it. The manifest carries db_sha256 for exactly this.
+MANIFEST="$DIR_MANIFESTS/$STAMP.meta"
+if [ -f "$MANIFEST" ]; then
+  expect_sha="$(sed -n 's/^db_sha256=//p' "$MANIFEST" | tr -d '\r' | head -1)"
+  if [ -n "$expect_sha" ]; then
+    actual_sha="$(sha256sum "$DUMP" | cut -d' ' -f1)"
+    if [ "$expect_sha" != "$actual_sha" ]; then
+      die "dump does not match its manifest checksum
+  expected $expect_sha
+  actual   $actual_sha
+  This is not the backup you think it is - refusing to restore."
+    fi
+    log "dump matches its manifest checksum (${expect_sha:0:12}…)"
+  else
+    log "WARNING: manifest has no db_sha256 line - dump verified only by gzip"
+  fi
+else
+  log "WARNING: no manifest for $STAMP - dump verified only by gzip"
+fi
+
 log "THIS OVERWRITES ALL CURRENT CMS CONTENT with the backup."
 if [ "$ASSUME_YES" -eq 0 ]; then
   read -r -p "Type 'restore' to continue: " answer
@@ -96,9 +120,46 @@ log "dropping existing tables in $LIVE_DB"
 log "importing the dump"
 zcat "$DUMP" | docker compose exec -T -e MYSQL_PWD="$ROOTPW" db mysql -uroot "$LIVE_DB"
 
-restored="$(mysql_root -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$LIVE_DB'" | tr -d '\r')"
+restored="$(mysql_root -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$LIVE_DB'" | tr -d '[:space:]')"
 [ "${restored:-0}" -gt 0 ] || die "import produced no tables - something went wrong"
 log "imported $restored tables"
+
+# Counting tables is the weakest possible check - a dump containing 14 correctly
+# shaped but completely EMPTY tables passes it, and you only discover the loss
+# after staff report missing posts. Count real rows instead, per content table.
+# COUNT(*) rather than information_schema.TABLE_ROWS: the latter is InnoDB's
+# running estimate and can be badly out of date, so it is not evidence.
+log "verifying restored row counts"
+CONTENT_TABLES="posts events notices pages settings users media"
+verify=""
+for t in $CONTENT_TABLES; do
+  n="$(mysql_root "$LIVE_DB" -e "SELECT COUNT(*) FROM \`$t\`" 2>/dev/null | tr -d '[:space:]')"
+  [ -n "$n" ] || n='MISSING'
+  verify="$verify$t=$n"$'\n'
+done
+printf '%s' "$verify" | sed 's/^/  /'
+
+missing=""
+for t in $CONTENT_TABLES; do
+  case "$verify" in *"$t=MISSING"*) missing="$missing $t" ;; esac
+done
+[ -z "$missing" ] || die "restore is missing expected table(s):$missing - this dump is not a full backup"
+
+field() { printf '%s' "$verify" | sed -n "s/^$1=//p" | tr -d '[:space:]'; }
+users_n="$(field users)"
+settings_n="$(field settings)"
+[ "${users_n:-0}" -ge 1 ]    || die "restored users table is empty - nobody could log in after this restore"
+[ "${settings_n:-0}" -ge 1 ] || die "restored settings table is empty - header and footer would render blank"
+
+total=0
+for t in $CONTENT_TABLES; do
+  n="$(field "$t")"; case "$n" in ''|*[!0-9]*) continue ;; esac; total=$((total + n))
+done
+log "restored content rows: $total (users=$users_n settings=$settings_n)"
+if [ "${total:-0}" -lt 5 ]; then
+  log "WARNING: only $total content rows restored. If this VM is new that is expected;"
+  log "         if it had live content, the chosen dump was probably empty or stale."
+fi
 
 # --- 4. uploaded media -------------------------------------------------------
 if [ "$DB_ONLY" -eq 0 ]; then
