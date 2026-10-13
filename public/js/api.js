@@ -35,10 +35,69 @@
   }
 
   /**
+   * Scheme allowlist for URLs that end up in href/src.
+   *
+   * A scheme is only honoured when it is on the list; anything else (javascript:,
+   * data:, vbscript:) is dropped and the link degrades to plain text. Control
+   * characters and Unicode spaces are stripped before the test because browsers
+   * ignore them when resolving a scheme - "java\tscript:" and "java\nscript:"
+   * both execute - so testing the raw string would pass a payload through.
+   */
+  const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+  const IGNORABLE_RE = /[\u0000-\u0020\u007f\u00a0\u1680\u180e\u2000-\u200f\u2028\u2029\u202f\u205f\u3000\ufeff]/g;
+
+  function safeUrl(url) {
+    const raw = String(url == null ? '' : url).trim();
+    if (!raw) return '';
+    const probe = raw.replace(IGNORABLE_RE, '');
+    if (SCHEME_RE.test(probe)) {
+      return /^(https?|mailto|tel):/i.test(probe) ? raw : '';
+    }
+    return raw; // relative path, bare media filename, or fragment
+  }
+
+  /**
+   * marked renderer that neutralises the two ways raw content becomes markup.
+   *
+   * marked deliberately passes HTML in the Markdown source straight through, so
+   * a post body containing <img onerror=...> or <style> lands in innerHTML
+   * verbatim. The nonce CSP stops inline script and javascript: URIs, but not
+   * injected CSS, <meta http-equiv=refresh>, same-origin form posts or DOM
+   * clobbering - and it is the only thing between staff text and script
+   * execution. Escape raw HTML and allowlist link/image schemes instead.
+   *
+   * No existing content uses raw HTML, so escaping it is not a visible change.
+   */
+  function mdRenderer() {
+    // Inherit from the stock renderer and override only the three methods that
+    // can turn stored text into markup. Handing marked a plain object with just
+    // these keys REPLACES the renderer, so heading/paragraph/list/text vanish
+    // and every document renders as bare source text.
+    var r = (window.marked && window.marked.Renderer) ? new window.marked.Renderer() : {};
+    r.html = function (text) {
+      return esc(text);
+    };
+    r.link = function (href, title, text) {
+      var url = safeUrl(href);
+      if (!url) return text;
+      return '<a href="' + esc(url) + '"' +
+        (title ? ' title="' + esc(title) + '"' : '') + '>' + text + '</a>';
+    };
+    r.image = function (href, title, alt) {
+      var url = safeUrl(href);
+      if (!url) return esc(alt || '');
+      return '<img src="' + esc(url) + '" alt="' + esc(alt || '') + '"' +
+        (title ? ' title="' + esc(title) + '"' : '') + '>';
+    };
+    return r;
+  }
+
+  /**
    * Markdown → HTML via the vendored marked (js/vendor/marked.min.js —
    * include it on pages that render Markdown, before this file). Media
    * references stay as bare library filenames in the stored text and are
    * resolved to upload URLs here, so content survives base-path changes.
+   * Rendered through mdRenderer(), so raw HTML in the source is escaped.
    */
   function mdToHtml(md) {
     var text = String(md == null ? '' : md);
@@ -50,7 +109,7 @@
       if (/^(https?:|\/|data:)/i.test(src)) return m;
       return pre + (mediaUrl(src) || src) + post;
     });
-    return window.marked.parse(text, { breaks: true, gfm: true });
+    return window.marked.parse(text, { breaks: true, gfm: true, renderer: mdRenderer() });
   }
 
   function mediaUrl(name) {
@@ -103,6 +162,8 @@
     esc: esc,
     textToHtml: textToHtml,
     mdToHtml: mdToHtml,
+    safeUrl: safeUrl,
+    mdRenderer: mdRenderer,
     mediaUrl: mediaUrl,
     fmtDate: fmtDate,
     fmtTime: fmtTime,

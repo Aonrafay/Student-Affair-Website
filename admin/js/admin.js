@@ -763,6 +763,59 @@
     '</div>';
   }
 
+  /**
+   * Scheme allowlist for URLs that end up in href/src. A scheme is only
+   * honoured when it is on the list; anything else (javascript:, data:,
+   * vbscript:) is dropped. Control characters and Unicode spaces are stripped
+   * before the test because browsers ignore them when resolving a scheme, so
+   * "java\tscript:" executes while passing a naive string test.
+   */
+  var SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+  var IGNORABLE_RE = /[\u0000-\u0020\u007f\u00a0\u1680\u180e\u2000-\u200f\u2028\u2029\u202f\u205f\u3000\ufeff]/g;
+
+  function safeUrl(url) {
+    var raw = String(url == null ? '' : url).trim();
+    if (!raw) return '';
+    var probe = raw.replace(IGNORABLE_RE, '');
+    if (SCHEME_RE.test(probe)) {
+      return /^(https?|mailto|tel):/i.test(probe) ? raw : '';
+    }
+    return raw; // relative path, bare media filename, or fragment
+  }
+
+  /**
+   * marked renderer that escapes raw HTML and allowlists link/image schemes.
+   *
+   * marked passes HTML in the Markdown source through untouched, so a post body
+   * containing <img onerror=...> reaches innerHTML verbatim. The nonce CSP stops
+   * inline script, but not injected CSS, <meta http-equiv=refresh>, same-origin
+   * form posts or DOM clobbering - and it is the only thing standing between
+   * staff-entered text and script execution. This is the same helper the public
+   * site uses (public/js/api.js); the two bundles are independent files, so it
+   * is duplicated rather than shared.
+   */
+  function mdRenderer() {
+    // Inherit from the stock renderer and override only the three methods that
+    // can turn stored text into markup. A plain object with just these keys
+    // REPLACES the renderer, so heading/paragraph/list/text disappear and the
+    // whole document renders as bare source text.
+    var r = (window.marked && window.marked.Renderer) ? new window.marked.Renderer() : {};
+    r.html = function (text) { return esc(text); };
+    r.link = function (href, title, text) {
+      var url = safeUrl(href);
+      if (!url) return text;
+      return '<a href="' + esc(url) + '"' +
+        (title ? ' title="' + esc(title) + '"' : '') + '>' + text + '</a>';
+    };
+    r.image = function (href, title, alt) {
+      var url = safeUrl(href);
+      if (!url) return esc(alt || '');
+      return '<img src="' + esc(url) + '" alt="' + esc(alt || '') + '"' +
+        (title ? ' title="' + esc(title) + '"' : '') + '>';
+    };
+    return r;
+  }
+
   /** Markdown → HTML (vendored marked) with media-library filenames → URLs. */
   function mdRender(text) {
     var src = String(text == null ? '' : text);
@@ -778,7 +831,7 @@
       if (/^(https?:|\/|data:)/i.test(imgSrc)) return m;
       return pre + (A.mediaUrl(imgSrc) || imgSrc) + post;
     });
-    return window.marked.parse(src, { breaks: true, gfm: true });
+    return window.marked.parse(src, { breaks: true, gfm: true, renderer: mdRenderer() });
   }
 
   /** The Markdown editor widget: toolbar + textarea + collapsible preview.

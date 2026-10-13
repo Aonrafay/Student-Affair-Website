@@ -21,6 +21,75 @@ const ALLOWED_TYPES = {
 };
 
 /**
+ * Magic-byte signatures per accepted MIME type.
+ *
+ * fileFilter below can only see the Content-Type the client declared, which is
+ * attacker-controlled: `curl -F "file=@evil.html;type=image/png"` stores HTML
+ * under a .png name. Combined with express.static serving uploads from the
+ * admin's own origin, that is stored XSS whatever the extension says.
+ *
+ * The extension is still derived from the declared type (see the filename
+ * callback) - this check then confirms the bytes actually agree, so a caller
+ * cannot get HTML/JS/PDF-polyglot content served from this origin.
+ *
+ * Each entry is (offset, expected bytes as a latin1 string). Offsets are fixed
+ * by the format specs; the checks are deliberately minimal but sufficient to
+ * tell the five accepted formats apart and reject everything else.
+ */
+const SIGNATURES = {
+  'image/jpeg': [
+    [0, '\xff\xd8\xff']
+  ],
+  'image/png': [
+    [0, '\x89PNG\r\n\x1a\n']
+  ],
+  'image/gif': [
+    [0, 'GIF87a'],
+    [0, 'GIF89a']
+  ],
+  'image/webp': [
+    [0, 'RIFF'],       // then "WEBP" at offset 8, checked below
+    [8, 'WEBP']
+  ],
+  'application/pdf': [
+    [0, '%PDF-']
+  ]
+};
+
+/**
+ * Confirm a file's real bytes match the MIME type it was declared with.
+ *
+ * Reads only the first 16 bytes, so cost is independent of file size. Returns
+ * null when the content matches, or a human-readable reason when it does not.
+ */
+function sniffMismatch(filePath, mime) {
+  const expected = SIGNATURES[mime];
+  // No signature table for this type means it never reaches here (fileFilter
+  // gates it), but fail closed rather than wave an unknown type through.
+  if (!expected) return 'unsupported content type';
+  let fd;
+  let head;
+  try {
+    fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(16);
+    const read = fs.readSync(fd, buf, 0, 16, 0);
+    head = buf.slice(0, read);
+  } catch (e) {
+    return 'could not be read back from disk';
+  } finally {
+    if (fd !== undefined) { try { fs.closeSync(fd); } catch (e) { /* ignore */ } }
+  }
+  if (head.length < 4) return 'file is empty or truncated';
+  for (const [offset, magic] of expected) {
+    const slice = head.slice(offset, offset + magic.length);
+    if (slice.toString('latin1') !== magic) {
+      return 'its contents do not look like ' + mime.replace('image/', '').toUpperCase();
+    }
+  }
+  return null;
+}
+
+/**
  * Per-file ceiling.
  *
  * There is deliberately no per-type limit - one global number, set with
@@ -88,6 +157,22 @@ function handleUpload(req, res) {
     if (!req.file) {
       return res.status(400).json({ error: 'No file received. Use a field named "file".' });
     }
+    // Content check first. The declared Content-Type is client-controlled, so a
+    // .png name with image/png proves nothing about the bytes; uploads are
+    // served from the admin's own origin, so HTML stored here is stored XSS.
+    const mismatch = sniffMismatch(req.file.path, req.file.mimetype);
+    if (mismatch) {
+      try { fs.unlinkSync(req.file.path); } catch (cleanupErr) { /* best effort */ }
+      audit.record(req, 'media.reject', {
+        module: 'media',
+        target: req.file.originalname || req.file.filename,
+        meta: { reason: 'content-signature-mismatch', declared_mime: req.file.mimetype }
+      });
+      return res.status(400).json({
+        error: 'That file was rejected: ' + mismatch +
+          '. The file type and its actual content must match.'
+      });
+    }
     // Disk guard: multer has already written the file to disk by this point,
     // so the quota check has to happen before the row is created AND the
     // orphaned file has to be removed when the limit is hit.
@@ -116,7 +201,11 @@ function handleUpload(req, res) {
       });
       return res.status(201).json(row);
     } catch (e) {
-      return res.status(500).json({ error: 'Could not record upload: ' + e.message });
+      // Generic message only. A driver error here names the table, the column
+      // and the constraint, which is free schema reconnaissance; the detail goes
+      // to the server log where it belongs. Mirrors the global error handler.
+      console.error('media: could not record upload', e);
+      return res.status(500).json({ error: 'Could not record the upload. Please try again.' });
     }
   });
 }

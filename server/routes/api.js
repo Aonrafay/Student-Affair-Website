@@ -8,6 +8,7 @@ const contentController = require('../controllers/contentController');
 const mediaController = require('../controllers/mediaController');
 const usersController = require('../controllers/usersController');
 const auditController = require('../lib/audit');
+const { clientErrorMessage } = require('../lib/helpers');
 const backupController = require('../controllers/backupController');
 const { protect, requireRole, requireModuleRole } = require('../middleware/authMiddleware');
 const { loginLimiter } = require('../middleware/rateLimit');
@@ -27,13 +28,17 @@ function buildApiRouter() {
   const router = express.Router();
 
   // --- Public: health ----------------------------------------------------------
+  // Anonymous and unrate-limited, so the failure body stays generic: a driver
+  // message here would hand schema detail to anyone who can reach the port, and
+  // it is reachable without a token. The reason is logged server-side.
   router.get('/health', async (req, res) => {
     try {
       const { pool } = require('../config/db');
       await pool.query('SELECT 1');
       res.json({ ok: true, db: true });
     } catch (e) {
-      res.status(503).json({ ok: false, db: false, error: e.message });
+      console.error('health: database probe failed', e);
+      res.status(503).json({ ok: false, db: false });
     }
   });
 
@@ -158,7 +163,9 @@ function buildApiRouter() {
       try {
         res.status(201).json(stripLegacy(await crud.create(req, req.body || {})));
       } catch (e) {
-        res.status(400).json({ error: e.message });
+        // 400 is right for a validation problem, but a driver failure is not one
+        // - see clientErrorMessage().
+        res.status(400).json({ error: clientErrorMessage(e, 'Could not save. Please check the values and try again.') });
       }
     }));
 
@@ -169,7 +176,7 @@ function buildApiRouter() {
         if (!row) return res.status(404).json({ error: 'Not found.' });
         res.json(stripLegacy(row));
       } catch (e) {
-        res.status(400).json({ error: e.message });
+        res.status(400).json({ error: clientErrorMessage(e, 'Could not publish. Please try again.') });
       }
     }));
 
@@ -179,7 +186,7 @@ function buildApiRouter() {
         if (!row) return res.status(404).json({ error: 'Not found.' });
         res.json(stripLegacy(row));
       } catch (e) {
-        res.status(400).json({ error: e.message });
+        res.status(400).json({ error: clientErrorMessage(e, 'Could not save. Please check the values and try again.') });
       }
     }));
 

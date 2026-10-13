@@ -48,4 +48,40 @@ function toJSON(value) {
   return value === undefined || value === null ? null : JSON.stringify(value);
 }
 
-module.exports = { slugify, uniqueSlug, parseJSON, toJSON };
+/**
+ * Decide whether an error's message is safe to return to the client.
+ *
+ * The module routes catch their own CRUD call and answer 400 with e.message so
+ * that validation problems ("slug is required") read clearly. But a failure
+ * that came from the driver instead names the table, the column and the
+ * constraint - "Data too long for column 'title' at row 1" - which is free
+ * schema reconnaissance and does not belong in an HTTP response.
+ *
+ * mysql2 tags its errors with code/errno/sqlState/sql; our own thrown errors
+ * have none of those. So: keep messages from application code, log and genericise
+ * everything the database produced.
+ */
+function isDatabaseError(e) {
+  return !!(e && (e.code || e.errno || e.sqlState || e.sql || e.sqlMessage));
+}
+
+/**
+ * A message that is safe to send to the client, logging the original.
+ * Falls back to `generic` for driver errors and anything unexpected.
+ */
+function clientErrorMessage(e, generic = 'Request failed. Please try again.') {
+  if (isDatabaseError(e)) {
+    console.error('api: suppressed database error', e);
+    return generic;
+  }
+  return (e && e.message) || generic;
+}
+
+module.exports = {
+  slugify,
+  uniqueSlug,
+  parseJSON,
+  toJSON,
+  isDatabaseError,
+  clientErrorMessage
+};
