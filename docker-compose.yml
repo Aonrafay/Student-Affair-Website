@@ -28,6 +28,15 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD:-sa}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       TZ: UTC
+    # Cap container logs. The default json-file driver has no size limit, so both
+    # the app's stdout and the MySQL error log grow without bound on a single
+    # 98 GB disk that also holds the database, the uploads and every backup.
+    # 10 x 5 MB keeps roughly the last 50 MB per service.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
@@ -44,6 +53,12 @@ services:
   app:
     build: .
     restart: unless-stopped
+    # Same log cap as the db service - see the comment there.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     ports:
       - "5000:5000"
     environment:

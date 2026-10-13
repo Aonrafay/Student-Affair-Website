@@ -121,7 +121,12 @@ Then from any machine on the LAN:
 - **Port 80 instead of 5000** (optional) — change the compose port mapping to `"80:5000"`, or put
   nginx on the VM using the proxy block below. When university IT mounts the app under the real
   domain nothing else changes — `BASE_PATH=/student-affairs` already matches.
-- **Fresh testing start** (⚠️ deletes DB data) — `docker compose down -v`.
+- **Fresh testing start** — `docker compose down -v` **destroys the database and every uploaded
+  file.** They live in the named volumes `db_data` and `uploads_data`; `-v` is precisely the flag
+  that deletes them. Do not run it on the deployed VM. Take a backup and confirm it landed
+  (`bash /opt/student-affairs/backup.sh daily`) first, or better, work on a clone. Plain
+  `docker compose down` is safe — containers stop, data survives, `up -d` brings it back. That is
+  what `test-volume-persistence.sh` asserts.
 
 > **Security:** change every secret in `.env` on the VM before exposing the app — especially
 > `ADMIN_PASSWORD`, since the dev defaults are public in git history.

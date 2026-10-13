@@ -25,11 +25,16 @@ $BLOCK_START
 # Cron gets a minimal PATH; without this docker/gzip/git are not found.
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # Nightly: full dump (with its binlog position), archive the closed binary
-# logs, snapshot .env, prune. Retention is small on purpose - the binlogs are
-# what let you recover to any minute, so fewer full copies are needed.
+# logs, snapshot .env, prune. KEEP_DB_DAILY=15 sets the point-in-time recovery
+# floor - it must stay above the window you promise, or PITR silently shrinks.
 15 2 * * * /opt/student-affairs/backup.sh daily >> $LOG 2>&1
 # Sundays: the same, plus one full media archive (MEDIA_BACKUP=weekly).
 30 3 * * 0 /opt/student-affairs/backup.sh weekly >> $LOG 2>&1
+# Housekeeping: prune audit_log (nothing else ever calls the prune endpoint),
+# check the newest dump is actually fresh and still a valid gzip, and rotate
+# the logs. Exits non-zero on any problem, so a failing backup becomes visible
+# instead of accumulating silently.
+17 4 * * * /opt/student-affairs/maintenance.sh >> $LOG 2>&1
 $BLOCK_END
 EOF
 )
@@ -40,5 +45,6 @@ echo "--- crontab for $(whoami) ---"
 crontab -l
 echo
 echo "timezone: $(timedatectl show -p Timezone --value 2>/dev/null || date +%Z)"
-echo "  daily  : tomorrow 02:15  (db + binlogs + .env)"
-echo "  weekly : next Sunday 03:15  (the above + one full media archive)"
+echo "  daily      : tomorrow 02:15  (db + binlogs + .env)"
+echo "  weekly     : next Sunday 03:30  (the above + one full media archive)"
+echo "  maintenance: tomorrow 04:17  (audit_log prune, backup freshness, log rotation)"
