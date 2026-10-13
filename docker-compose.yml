@@ -10,6 +10,18 @@ services:
   db:
     image: mysql:8
     restart: unless-stopped
+    # Pin binary-log expiry instead of inheriting MySQL's 30-day default.
+    #
+    # backup.sh archives closed binlogs and keeps BINLOG_KEEP_DAYS of them (20).
+    # The live logs inside this volume are the source for those archives, so if
+    # the server expires one before a daily backup has run, there is a hole in
+    # the middle of the recovery window that no amount of archiving repairs. Keep
+    # the server's own window comfortably longer than the archive window, and
+    # loud about it: MySQL warns at startup if binlog_expire_logs_seconds is
+    # longer than max_binlog_size, which is exactly the signal to look for here.
+    command:
+      - --binlog-expire-logs-seconds=2592000
+      - --max-binlog-size=268435456
     environment:
       MYSQL_DATABASE: student_affairs
       MYSQL_USER: sa

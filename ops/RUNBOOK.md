@@ -92,15 +92,34 @@ secrets survive redeploys.
 The site is **not** backed up as a filesystem copy of the VM. It is
 reproducible from this repo plus those artifacts.
 
-### Retention is small on purpose
+### Retention is sized by the recovery window, not by disk tidiness
 
-| | Count | Why so few |
+| | Count | Why |
 |---|---|---|
-| `db/daily/` | 3 | Dumps are ~8 KB. Keeping more is pointless. |
-| `db/weekly/` | 1 | One weekly point of reference |
+| `db/daily/` | 15 | **This is the number that decides your recovery floor.** See below. |
+| `db/weekly/` | 2 | Two weekly points of reference |
 | `media/` | 1 | Images/PDFs are already compressed; a copy costs what the media costs |
-| `db/binlog/` | 14 **days** | Replaces the need for many full dumps |
+| `db/binlog/` | 20 **days** | Must exceed `KEEP_DB_DAILY` - see below |
 | `env/` | 1 | It's a snapshot of now, not history |
+
+**The recovery floor is the oldest surviving daily dump, not the binlog
+retention.** A point-in-time restore replays binary logs onto a base dump, so
+what bounds it is the oldest dump you still have. Keeping 20 days of binary logs
+alongside only 3 daily dumps buys nothing: there is no 3-day-old base to replay
+20 days of logs onto, so you recover to roughly 3 days ago regardless.
+
+`KEEP_DB_DAILY=15` and `BINLOG_KEEP_DAYS=20` together make the documented
+14-day window real. A dump here is ~8 KB and a binlog archive a few KB at this
+site's write volume, so the whole 15-day window costs well under a megabyte.
+
+Two ways this silently regresses, both worth checking after any config change:
+
+- Raising `BINLOG_KEEP_DAYS` without raising `KEEP_DB_DAILY` buys false
+  confidence, not extra recovery.
+- MySQL expiring a binlog inside the volume *before* `backup.sh` archives it
+  leaves a hole in the middle of the window that no amount of archiving repairs.
+  `docker-compose.yml` pins `--binlog-expire-logs-seconds=2592000` (30 days) so
+  the server's own window stays well outside the 20-day archive window.
 
 **Compression is not the lever here.** The database dumps to a few KB and
 `jpg`/`png`/`pdf` are already compressed, so `tar.gz` on media saves ~0%. The
@@ -252,9 +271,19 @@ All of these were run against this deployment and pass. `smoke-test.ps1
 -KeepData` leaves its test post and media in place, which is what you want if the
 next step is to prove the backup captured them.
 
-> A **restore drill is not the same as a restore.** `restore-drill.sh` and
-> `pitr-test.sh` never touch live data; `restore.sh` and `restore-to-time.sh
-> --apply` do. Keep that distinction when you run them under pressure.
+> A **restore drill is not the same as a restore**, but the line between the two
+> is not where you might expect:
+>
+> - `restore-drill.sh` never touches live data. It imports into a throwaway
+>   schema and drops it on exit.
+> - `restore-to-time.sh` is safe **by default** - it drills into
+>   `pitr_drill_$$`. It touches live data only with `--apply`.
+> - `pitr-test.sh` is **mixed**. Its recovery half is safe, but to prove anything
+>   it first creates, publishes and then deletes a real post through the admin
+>   API, writes `audit_log` rows, and runs `backup.sh` three times - each of which
+>   executes retention pruning. It does not lose content, but it is not
+>   read-only. Do not run it on an evening when an editor is mid-entry.
+> - `restore.sh` is the destructive one: it drops every table.
 
 ---
 
@@ -339,8 +368,10 @@ put real or personal content in it, and do not reuse these passwords elsewhere.
   they must live on something with room.
 - **Restore is a single-VM operation.** There is no standby and the backup files
   are only as safe as the disk they sit on.
-- **Point-in-time restore covers 14 days** of binary logs, not forever. After
-  that you are back to whatever full dumps survive.
+- **Point-in-time restore covers ~14 days, not forever.** That window is set by
+  the oldest surviving daily dump (15 of them are kept), not by the binary logs.
+  See "Retention is sized by the recovery window" above - the two numbers have to
+  move together or the claim in this file becomes untrue.
 - **The login rate limiter is in process memory**, so it resets if the app
   container restarts, and it would not be shared across replicas. Fine for one
   node; not a distributed limiter.

@@ -8,8 +8,17 @@
 #   5. recover to a moment BEFORE it existed - it must not
 #
 # This is the only test that proves the binlog replay works, rather than that
-# the files exist. Everything runs in throwaway schemas; live data is never
-# touched.
+# the files exist.
+#
+# IMPORTANT: the RECOVERY half runs entirely in throwaway schemas and cannot touch
+# live data. The SETUP half does write to it - step 2 creates and publishes a real
+# post through the admin API, step 3 deletes it, and step 1 runs backup.sh three
+# times, each of which executes retention pruning. So this script leaves audit_log
+# rows behind and can prune a backup artifact. It loses no content, but it is not
+# read-only: do not run it while an editor is mid-entry.
+#
+# If you need a run that writes nothing at all, use restore-drill.sh instead - it
+# imports into a scratch schema and never touches the live database.
 #
 #   bash /opt/student-affairs/pitr-test.sh
 set -euo pipefail
@@ -130,4 +139,5 @@ fi
 
 mysql_root -e "DROP DATABASE IF EXISTS \`$SCHEMA\`;" > /dev/null 2>&1 || true
 echo
-echo "PITR DRILL COMPLETE - live data was never modified"
+echo "PITR DRILL COMPLETE - live CONTENT was never modified (the marker post was"
+echo "  created and deleted by this script; audit_log rows and pruning were not)"

@@ -44,11 +44,29 @@ DIR_META="$DIR_DB/manifests"
 DIR_MEDIA="$BACKUPS/media"
 DIR_ENV="$BACKUPS/env"
 
-KEEP_DB_DAILY="${KEEP_DB_DAILY:-3}"
-KEEP_DB_WEEKLY="${KEEP_DB_WEEKLY:-1}"
+# Retention.
+#
+# These four numbers have to agree, and getting the relationship wrong is how you
+# end up believing you have 14 days of recovery when you have 3.
+#
+# A point-in-time restore needs a base dump PLUS every binlog from that dump
+# onwards. So the real recovery floor is the OLDEST SURVIVING DAILY DUMP, not
+# BINLOG_KEEP_DAYS: archiving 14 days of binary logs is pointless if the oldest
+# dump you still have is from 3 days ago, because there is no base to replay them
+# onto. Hence KEEP_DB_DAILY must be >= the recovery window you promise, and
+# BINLOG_KEEP_DAYS must be > KEEP_DB_DAILY so the oldest dump still has its
+# binlogs archived.
+#
+# A dump is ~8 KB and a binlog archive a few KB at this site's write volume, so
+# a 15-day window costs well under a megabyte. Raising KEEP_DB_DAILY is
+# effectively free until the media archives become the dominant cost.
+KEEP_DB_DAILY="${KEEP_DB_DAILY:-15}"
+KEEP_DB_WEEKLY="${KEEP_DB_WEEKLY:-2}"
 MEDIA_BACKUP="${MEDIA_BACKUP:-weekly}"
 MEDIA_KEEP="${MEDIA_KEEP:-1}"
-BINLOG_KEEP_DAYS="${BINLOG_KEEP_DAYS:-14}"
+# Must exceed KEEP_DB_DAILY. A binlog archive older than the oldest retained dump
+# can never be used, so keeping more of them just wastes disk.
+BINLOG_KEEP_DAYS="${BINLOG_KEEP_DAYS:-20}"
 MIN_FREE_GB="${MIN_FREE_GB:-10}"
 BACKUP_BUDGET_GB="${BACKUP_BUDGET_GB:-0}"
 
