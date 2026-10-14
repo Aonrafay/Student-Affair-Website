@@ -250,22 +250,45 @@ before it existed (must not). Live data is never modified.
 ## 6. Tests
 
 ```powershell
-# end-to-end over HTTP: login, draft, publish, unpublish, media upload, cleanup
+# end-to-end over HTTP: login, draft, publish, unpublish, media upload, favicon,
+# raw templates stay unserved, cleanup
 powershell -ExecutionPolicy Bypass -File ops\smoke-test.ps1
 
-# ~60 assertions over real HTTP: headers, CSP nonce, SVG refusal, login lockout,
-# token revocation, SQLi, audit log, backup download, traversal probes
+# 75 assertions over real HTTP: headers, CSP nonce, SVG refusal, content-signature
+# spoofing, login lockout, token revocation, SQLi, mass assignment, audit log,
+# backup downloads for every kind, traversal probes, driver-error leakage
 powershell -ExecutionPolicy Bypass -File ops\security-test.ps1
+
+# bytes and references: real JPEG + PDF round-trip byte-identical, traversal on
+# /uploads, reference integrity, quota accounting, the local backup mirror
+powershell -ExecutionPolicy Bypass -File ops\storage-test.ps1
+powershell -ExecutionPolicy Bypass -File ops\storage-test.ps1 -DeepQuota   # waits out the 60 s usage cache
+
+# image placement, the media picker, gallery arrays, configurable upload limits
+powershell -ExecutionPolicy Bypass -File ops\media-placement-test.ps1
+
+# Markdown cannot inject HTML, and ordinary Markdown still renders. Runs the real
+# shipped bundle, so it fails if the sanitiser is removed OR if the renderer is
+# replaced instead of overridden (which silently renders every article as source).
+node ops\markdown-sanitizer.test.js
 ```
 
 On the VM:
 
 ```bash
-bash /opt/student-affairs/restore-drill.sh              # backup restores, live untouched
+bash /opt/student-affairs/restore-drill.sh              # backup restores into a usable site
 bash /opt/student-affairs/pitr-test.sh                  # point-in-time recovery, both directions
 bash /opt/student-affairs/test-volume-persistence.sh     # data survives compose down/up
+bash /opt/student-affairs/maintenance.sh                # audit prune + backup freshness watchdog
 docker compose exec -T app node server/tests/uploadsQuota.test.js
 ```
+
+`maintenance.sh` is the one that runs unattended (nightly, 04:17). It prunes
+`audit_log`, checks that the newest daily dump is recent and still a valid gzip,
+and rotates `backup.log`. It exits non-zero on any problem, so a failing backup
+becomes visible to exit-code monitoring — though nothing is emailed, so someone
+still has to look at `backups/backup.log`. It takes ~10 seconds and is safe to
+run by hand at any time.
 
 All of these were run against this deployment and pass. `smoke-test.ps1
 -KeepData` leaves its test post and media in place, which is what you want if the
@@ -361,7 +384,29 @@ put real or personal content in it, and do not reuse these passwords elsewhere.
 - **uploads has a 20 GB quota** (`UPLOADS_MAX_BYTES`), and `backup.sh` refuses to
   run below 10 GB free, so a runaway upload cannot silently fill the disk. But
   **nothing pages you** when the disk gets low — check `df -h /` and the last
-  lines of `backups/backup.log` occasionally.
+  lines of `backups/backup.log` occasionally. `maintenance.sh` (nightly at 04:17)
+  now fails loudly if the newest dump is stale or corrupt, but it still only
+  writes to a log file — nobody is emailed.
+- **Deleting media does not check whether content still references it.** There is
+  no foreign key and no reverse index: every reference is a bare filename in a
+  `VARCHAR` column or embedded in Markdown. Deleting a file used as a post cover
+  or an inline image leaves that content pointing at nothing and renders a broken
+  image on the public site. `storage-test.ps1` asserts this current behaviour on
+  purpose, so the day a guard is added the test tells you rather than the change
+  landing silently.
+- **The login rate limiter keys on email+IP with no per-IP aggregate cap**, so an
+  attacker spraying one guess across many accounts gets a fresh 5-attempt budget
+  per address. It is also in-process memory, so it resets when the app container
+  restarts, and it collapses to a single shared IP behind any reverse proxy —
+  which would let anyone lock a known account out with five bad logins.
+- **Password policy is length-only** (8+ characters, no blocklist). The two live
+  accounts have 24-character generated passwords, but nothing enforces complexity
+  on a password someone types in the admin UI.
+- **Sign-out only clears localStorage**; the JWT stays valid up to 8 hours. Only
+  "Sign out everywhere" bumps `token_version` and revokes it.
+- **Auth events and backup downloads are not audited.** The audit log records
+  content, media and user changes; a login failure, a lockout, or someone
+  downloading a full database dump leaves no trace there.
 - **At ~40 GB of media, the on-VM media archive has to be turned off**
   (`MEDIA_BACKUP=never`), because 40 GB of media plus even one archive exceeds
   the 78 GB free. At that point the originals on your PC are the only copy and
